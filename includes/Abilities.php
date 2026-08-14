@@ -71,6 +71,7 @@ final class Abilities {
 		Skills::register( $gate );
 		Design::register( $gate );
 		Performance::register( $gate );
+		SeoPlan::register( $gate );
 		Files::register();
 		Runtime::register();
 		Cli::register();

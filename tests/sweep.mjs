@@ -67,6 +67,10 @@ const INPUTS = {
 	'niranzwp/write-file': { path: 'niranzwp-sweep.txt', content: 'sweep', dry_run: true },
 	'niranzwp/delete-file': null,
 
+	'niranzwp/seo-priorities': {},
+	'niranzwp/internal-link-suggest': { limit: 3 },
+	'niranzwp/content-refresh': { limit: 5 },
+
 	'niranzwp/db-report': {},
 	'niranzwp/db-cleanup': { dry_run: true },
 	'niranzwp/asset-audit': {},

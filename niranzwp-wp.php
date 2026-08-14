@@ -53,6 +53,7 @@ require_once NIRANZWP_DIR . 'includes/Details.php';
 require_once NIRANZWP_DIR . 'includes/Updater.php';
 require_once NIRANZWP_DIR . 'includes/Design.php';
 require_once NIRANZWP_DIR . 'includes/Performance.php';
+require_once NIRANZWP_DIR . 'includes/SeoPlan.php';
 
 /**
  * The Abilities API landed in WordPress 6.9. Without it there is nothing to
