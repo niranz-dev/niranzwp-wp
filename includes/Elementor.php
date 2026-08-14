@@ -394,6 +394,9 @@ final class Elementor {
 			return new \WP_Error( 'niranzwp_encode_failed', 'Could not re-encode the layout.' );
 		}
 
+		// Snapshot the layout before it is replaced, so the edit is undoable.
+		$result['checkpoint_id'] = Checkpoint::before_post( $id, 'elementor-update-setting' );
+
 		// Elementor reads this meta slashed; update_post_meta strips one level
 		// of slashes, so it has to be added back or every quote is mangled.
 		update_post_meta( $id, '_elementor_data', wp_slash( $json ) );

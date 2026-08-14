@@ -358,6 +358,9 @@ final class Blocks {
 			return $result;
 		}
 
+		// Snapshot the post before its body is replaced, so the edit is undoable.
+		$result['checkpoint_id'] = Checkpoint::before_post( $id, 'block-write' );
+
 		$updated = wp_update_post( [ 'ID' => $id, 'post_content' => $after ], true );
 		if ( is_wp_error( $updated ) ) {
 			return $updated;

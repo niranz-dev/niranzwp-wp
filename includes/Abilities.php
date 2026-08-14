@@ -47,6 +47,7 @@ final class Abilities {
 		Content::register( $gate );
 		Blocks::register( $gate );
 		Elementor::register( $gate );
+		Checkpoint::register( $gate );
 		Files::register();
 		Runtime::register();
 		Cli::register();

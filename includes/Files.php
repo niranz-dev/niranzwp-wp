@@ -240,6 +240,11 @@ final class Files {
 			$out['note']   = 'Nothing was written. Pass dry_run false to apply.';
 			return $out;
 		}
+
+		// Snapshot first. A checkpoint that could not be taken is reported, not
+		// fatal -- refusing the write because the undo failed would be worse.
+		$out['checkpoint_id'] = Checkpoint::before_file( ltrim( self::rel( $path ), '/' ), 'write-file' );
+
 		if ( false === file_put_contents( $path, $content ) ) {
 			return new \WP_Error( 'niranzwp_write_failed', 'Could not write the file. Check filesystem permissions.' );
 		}
@@ -278,10 +283,12 @@ final class Files {
 				'note'    => 'Nothing was deleted. Pass dry_run false to apply.',
 			];
 		}
+		$checkpoint = Checkpoint::before_file( $rel, 'delete-file' );
+
 		if ( ! unlink( $path ) ) {
 			return new \WP_Error( 'niranzwp_delete_failed', 'Could not delete the file.' );
 		}
 
-		return [ 'path' => '/' . $rel, 'status' => 'deleted', 'dry_run' => false ];
+		return [ 'path' => '/' . $rel, 'status' => 'deleted', 'dry_run' => false, 'checkpoint_id' => $checkpoint ];
 	}
 }

@@ -67,6 +67,13 @@ const INPUTS = {
 	'niranzwp/write-file': { path: 'niranzwp-sweep.txt', content: 'sweep', dry_run: true },
 	'niranzwp/delete-file': null,
 
+	'niranzwp/checkpoint-create': { label: 'sweep', options: ['blogname'] },
+	'niranzwp/checkpoint-list': { limit: 3 },
+	// Exercised for real below, against a checkpoint this sweep created and
+	// then removes -- restoring an arbitrary one would undo unrelated work.
+	'niranzwp/checkpoint-restore': '@roundtrip',
+	'niranzwp/checkpoint-delete': '@roundtrip',
+
 	'niranzwp/evaluate': { code: 'return 1 + 1;' },
 	'niranzwp/run-wp-cli': { command: 'option get blogname' },
 	'niranzwp/wp-cli-status': {},
@@ -104,6 +111,9 @@ for (const name of discovered) {
 		continue;
 	}
 	let input = INPUTS[name];
+	if (input === '@roundtrip') {
+		continue; // covered by the dedicated round trip below
+	}
 	if (input === null) {
 		results.push({ name, status: 'skip', detail: 'not safe to call unattended' });
 		continue;
@@ -129,6 +139,39 @@ for (const name of discovered) {
 		status: r.ok ? 'ok' : (declined ? 'env' : 'FAIL'),
 		detail: r.ok ? `${r.out.trim().split('\n').length} lines` : r.out.replace(/^error \[[a-z_]+\]: /m, '').trim().split('\n')[0],
 	});
+}
+
+/*
+ * Checkpoint round trip: change an option, restore it, confirm the old value is
+ * back, then clean up. Testing restore against a checkpoint the sweep did not
+ * create would undo whatever else was going on.
+ */
+{
+	const created = await cli(['run', 'niranzwp/checkpoint-create', '--input',
+		JSON.stringify({ label: 'sweep round trip', options: ['blogname'] }), '--yes']);
+
+	if (!created.ok) {
+		results.push({ name: 'niranzwp/checkpoint-restore', status: 'FAIL', detail: 'could not create a checkpoint to restore' });
+	} else {
+		const id = JSON.parse(created.out).checkpoint_id;
+		const before = JSON.parse((await cli(['settings', 'get', '--json'])).out).title;
+
+		await cli(['settings', 'set', 'title', 'sweep clobbered this', '--yes']);
+		const applied = await cli(['run', 'niranzwp/checkpoint-restore', '--input',
+			JSON.stringify({ checkpoint_id: id, dry_run: false }), '--yes']);
+		const after = JSON.parse((await cli(['settings', 'get', '--json'])).out).title;
+
+		results.push({
+			name: 'niranzwp/checkpoint-restore',
+			status: applied.ok && after === before ? 'ok' : 'FAIL',
+			detail: applied.ok && after === before ? `round trip restored "${after}"` : `expected "${before}", got "${after}"`,
+		});
+
+		if (after !== before) await cli(['settings', 'set', 'title', before, '--yes']);
+
+		const removed = await cli(['run', 'niranzwp/checkpoint-delete', '--input', JSON.stringify({ checkpoint_id: id }), '--yes']);
+		results.push({ name: 'niranzwp/checkpoint-delete', status: removed.ok ? 'ok' : 'FAIL', detail: removed.ok ? 'removed' : removed.out.split('\n')[0] });
+	}
 }
 
 // An ability registered but absent from INPUTS is the failure mode that matters

@@ -36,6 +36,7 @@ require_once NIRANZWP_DIR . 'includes/Content.php';
 require_once NIRANZWP_DIR . 'includes/Blocks.php';
 require_once NIRANZWP_DIR . 'includes/Elementor.php';
 require_once NIRANZWP_DIR . 'includes/Files.php';
+require_once NIRANZWP_DIR . 'includes/Checkpoint.php';
 require_once NIRANZWP_DIR . 'includes/Runtime.php';
 require_once NIRANZWP_DIR . 'includes/Cli.php';
 require_once NIRANZWP_DIR . 'includes/Mcp.php';
@@ -61,6 +62,7 @@ function boot(): void {
 		return;
 	}
 
+	Checkpoint::init();
 	Abilities::init();
 	Mcp::init();
 	Connections::init();
