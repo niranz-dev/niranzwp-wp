@@ -50,6 +50,7 @@ require_once NIRANZWP_DIR . 'includes/Mcp.php';
 require_once NIRANZWP_DIR . 'includes/Connections.php';
 require_once NIRANZWP_DIR . 'includes/Admin.php';
 require_once NIRANZWP_DIR . 'includes/Details.php';
+require_once NIRANZWP_DIR . 'includes/Updater.php';
 
 /**
  * The Abilities API landed in WordPress 6.9. Without it there is nothing to
@@ -82,6 +83,7 @@ function boot(): void {
 	Connections::init();
 	Admin::init();
 	Details::init();
+	Updater::init();
 }
 add_action( 'plugins_loaded', __NAMESPACE__ . '\\boot' );
 
