@@ -53,19 +53,19 @@ const INPUTS = {
 	'niranzwp/block-types': {},
 	'niranzwp/block-type': { name: 'core/paragraph' },
 	'niranzwp/block-read': { id: 1 },
-	'niranzwp/block-write': null, // rewrites a post body; not safe unattended
+	'niranzwp/block-write': '@roundtrip',
 
 	'niranzwp/elementor-status': {},
 	// Resolved at runtime to a page that actually has _elementor_data, since a
 	// hard-coded id would silently pass on one install and fail on the next.
 	'niranzwp/elementor-read': { id: '@elementor', depth: 2 },
 	'niranzwp/elementor-find': { id: '@elementor', widget_type: 'heading' },
-	'niranzwp/elementor-update-setting': null, // mutates a live layout
+	'niranzwp/elementor-update-setting': '@roundtrip',
 
 	'niranzwp/read-file': { path: 'wp-config-sample.php' },
 	'niranzwp/list-directory': { path: 'wp-content/themes' },
 	'niranzwp/write-file': { path: 'niranzwp-sweep.txt', content: 'sweep', dry_run: true },
-	'niranzwp/delete-file': null,
+	'niranzwp/delete-file': '@roundtrip',
 
 	'niranzwp/seo-priorities': {},
 	'niranzwp/internal-link-suggest': { limit: 3 },
@@ -190,6 +190,124 @@ for (const name of discovered) {
 
 		const removed = await cli(['run', 'niranzwp/checkpoint-delete', '--input', JSON.stringify({ checkpoint_id: id }), '--yes']);
 		results.push({ name: 'niranzwp/checkpoint-delete', status: removed.ok ? 'ok' : 'FAIL', detail: removed.ok ? 'removed' : removed.out.split('\n')[0] });
+	}
+}
+
+
+/*
+ * The three destructive abilities.
+ *
+ * These were skipped for as long as there was no way to put back what they
+ * changed, which meant the three most dangerous things in the plugin were the
+ * three least tested. Checkpoints and the recovery guard removed that excuse:
+ * each one now runs for real against a target the sweep creates, and is undone
+ * through the checkpoint the ability itself returned -- which tests the undo at
+ * the same time.
+ */
+{
+	const json = (r) => { try { return JSON.parse(r.out); } catch { return null; } };
+
+	const restore = async (id) =>
+		id ? (await cli(['run', 'niranzwp/checkpoint-restore', '--input', JSON.stringify({ checkpoint_id: id, dry_run: false }), '--yes'])).ok : false;
+
+	/* ---------------------------------------------------------- block-write */
+	{
+		const made = await cli(['post', 'create', '--title', 'sweep block-write target', '--yes']);
+		const id = made.out.match(/created post (\d+)/)?.[1];
+
+		if (!id) {
+			results.push({ name: 'niranzwp/block-write', status: 'FAIL', detail: 'could not create a post to write to' });
+		} else {
+			const before = json(await cli(['run', 'niranzwp/block-read', '--input', JSON.stringify({ id: +id })]));
+
+			const wrote = await cli(['run', 'niranzwp/block-write', '--input', JSON.stringify({
+				id: +id,
+				mode: 'replace',
+				dry_run: false,
+				blocks: [{ name: 'core/paragraph', attributes: {}, innerHTML: '<p>written by the sweep</p>' }],
+			}), '--yes']);
+
+			const after = json(await cli(['run', 'niranzwp/block-read', '--input', JSON.stringify({ id: +id })]));
+			const changed = JSON.stringify(before?.blocks) !== JSON.stringify(after?.blocks);
+			const ckpt = json(wrote)?.checkpoint_id;
+
+			const undone = await restore(ckpt);
+			const back = json(await cli(['run', 'niranzwp/block-read', '--input', JSON.stringify({ id: +id })]));
+			const restored = JSON.stringify(back?.blocks) === JSON.stringify(before?.blocks);
+
+			results.push({
+				name: 'niranzwp/block-write',
+				status: wrote.ok && changed && undone && restored ? 'ok' : 'FAIL',
+				detail: wrote.ok && changed && undone && restored
+					? 'wrote, verified, restored from its own checkpoint'
+					: `wrote=${wrote.ok} changed=${changed} undone=${undone} restored=${restored}`,
+			});
+
+			await cli(['post', 'delete', id, '--force', '--yes']);
+		}
+	}
+
+	/* ---------------------------------------------------------- delete-file */
+	{
+		const path = 'niranzwp-sweep-delete-me.txt';
+		const body = 'the sweep put this here';
+
+		await cli(['run', 'niranzwp/write-file', '--input', JSON.stringify({ path, content: body, dry_run: false }), '--yes']);
+
+		const gone = await cli(['run', 'niranzwp/delete-file', '--input', JSON.stringify({ path, dry_run: false }), '--yes']);
+		const missing = !(await cli(['run', 'niranzwp/read-file', '--input', JSON.stringify({ path })])).ok;
+
+		const ckpt = json(gone)?.checkpoint_id;
+		const undone = await restore(ckpt);
+		const readBack = json(await cli(['run', 'niranzwp/read-file', '--input', JSON.stringify({ path })]));
+		const restored = readBack?.content === body;
+
+		results.push({
+			name: 'niranzwp/delete-file',
+			status: gone.ok && missing && undone && restored ? 'ok' : 'FAIL',
+			detail: gone.ok && missing && undone && restored
+				? 'deleted, verified gone, restored byte-for-byte'
+				: `deleted=${gone.ok} gone=${missing} undone=${undone} restored=${restored}`,
+		});
+
+		await cli(['run', 'niranzwp/delete-file', '--input', JSON.stringify({ path, dry_run: false }), '--yes']);
+	}
+
+	/* ----------------------------------------- elementor-update-setting */
+	if (!elementorId) {
+		results.push({ name: 'niranzwp/elementor-update-setting', status: 'skip', detail: 'no Elementor page on this install' });
+	} else {
+		// elementor-find returns `elements[]` carrying `element_id`; `matches` is
+		// a count, not the list. Reading the wrong one silently skipped this
+		// test rather than failing it, which is how it stayed unnoticed.
+		const found = json(await cli(['run', 'niranzwp/elementor-find', '--input', JSON.stringify({ id: elementorId, widget_type: 'heading' })]));
+		const target = (found?.elements ?? [])[0];
+
+		if (!target?.element_id) {
+			results.push({ name: 'niranzwp/elementor-update-setting', status: 'skip', detail: 'no heading widget to change' });
+		} else {
+			const read = (o) => JSON.stringify(o?.elements ?? o?.tree ?? o);
+			const before = read(json(await cli(['run', 'niranzwp/elementor-read', '--input', JSON.stringify({ id: elementorId, settings: true })])));
+
+			const set = await cli(['run', 'niranzwp/elementor-update-setting', '--input', JSON.stringify({
+				id: elementorId, element_id: target.element_id, setting: 'title', value: 'changed by the sweep', dry_run: false,
+			}), '--yes']);
+
+			const after = read(json(await cli(['run', 'niranzwp/elementor-read', '--input', JSON.stringify({ id: elementorId, settings: true })])));
+			const changed = before !== after;
+			const ckpt = json(set)?.checkpoint_id;
+
+			const undone = await restore(ckpt);
+			const back = read(json(await cli(['run', 'niranzwp/elementor-read', '--input', JSON.stringify({ id: elementorId, settings: true })])));
+
+			results.push({
+				name: 'niranzwp/elementor-update-setting',
+				status: set.ok && changed && undone && back === before ? 'ok' : 'FAIL',
+				detail: set.ok && changed && undone && back === before
+					? 'changed a heading, verified, restored the layout'
+					: `set=${set.ok} changed=${changed} undone=${undone} restored=${back === before}`,
+			});
+		}
 	}
 }
 
