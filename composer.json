@@ -1,0 +1,33 @@
+{
+    "name": "niranz/niranzwp-wp",
+    "description": "Exposes safe, purpose-built abilities so CLIs and AI agents can work with WordPress through the Abilities API.",
+    "type": "wordpress-plugin",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Niranjan",
+            "homepage": "https://niranz.dev"
+        }
+    ],
+    "require": {
+        "php": ">=8.0",
+        "wordpress/mcp-adapter": "^0.5.0",
+        "league/oauth2-server": "^8.5",
+        "nyholm/psr7": "^1.8"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true,
+        "allow-plugins": {
+            "composer/installers": true
+        },
+        "platform": {
+            "php": "8.0.0"
+        }
+    },
+    "autoload": {
+        "psr-4": {
+            "NiranzWP\\": "includes/"
+        }
+    }
+}
