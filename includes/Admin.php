@@ -29,6 +29,7 @@ final class Admin {
 		add_submenu_page( self::SLUG, __( 'Abilities Hub', 'niranzwp' ), __( 'Abilities Hub', 'niranzwp' ), CAPABILITY, self::SLUG . '-abilities', [ Hub::class, 'render' ] );
 		add_submenu_page( self::SLUG, __( 'Context', 'niranzwp' ), __( 'Context', 'niranzwp' ), CAPABILITY, self::SLUG . '-context', [ ContextAdmin::class, 'render' ] );
 		add_submenu_page( self::SLUG, __( 'Skills', 'niranzwp' ), __( 'Skills', 'niranzwp' ), CAPABILITY, self::SLUG . '-skills', [ SkillsAdmin::class, 'render' ] );
+		add_submenu_page( self::SLUG, __( 'Checkpoints', 'niranzwp' ), __( 'Checkpoints', 'niranzwp' ), CAPABILITY, self::SLUG . '-checkpoints', [ CheckpointAdmin::class, 'render' ] );
 		add_submenu_page( self::SLUG, __( 'Troubleshoot', 'niranzwp' ), __( 'Troubleshoot', 'niranzwp' ), CAPABILITY, self::SLUG . '-troubleshoot', [ self::class, 'render_troubleshoot' ] );
 	}
 
@@ -146,6 +147,80 @@ final class Admin {
 		}
 	}
 
+	/**
+	 * The state of the site at a glance, above the settings.
+	 *
+	 * Each tile answers a question the owner would otherwise have to go to
+	 * another screen to answer, and links to that screen. The counts are read
+	 * live rather than cached, because a stale number here is worse than no
+	 * number at all -- it is a claim about what is exposed right now.
+	 */
+	private static function dashboard(): void {
+		$abilities = function_exists( 'wp_get_abilities' ) ? count( wp_get_abilities() ) : 0;
+		$disabled  = count( Hub::disabled() );
+		$skills    = count( Skills::catalogue() );
+		$points    = count( Checkpoint::all( 100 ) );
+		$guard     = Recovery::installed();
+
+		$tiles = [
+			[
+				'value' => (string) $abilities,
+				'label' => 0 === $disabled
+					? __( 'abilities exposed', 'niranzwp' )
+					: sprintf( __( 'exposed, %d switched off', 'niranzwp' ), $disabled ),
+				'href'  => admin_url( 'admin.php?page=niranzwp-abilities' ),
+				'tone'  => Settings::active() ? 'on' : 'off',
+			],
+			[
+				'value' => (string) $skills,
+				'label' => __( 'skills available', 'niranzwp' ),
+				'href'  => admin_url( 'admin.php?page=niranzwp-skills' ),
+				'tone'  => '',
+			],
+			[
+				'value' => (string) $points,
+				'label' => __( 'checkpoints kept', 'niranzwp' ),
+				'href'  => admin_url( 'admin.php?page=niranzwp-checkpoints' ),
+				'tone'  => '',
+			],
+			[
+				'value' => $guard ? __( 'Armed', 'niranzwp' ) : __( 'Off', 'niranzwp' ),
+				'label' => $guard
+					? __( 'recovery guard', 'niranzwp' )
+					: __( 'recovery guard -- on with filesystem', 'niranzwp' ),
+				'href'  => '',
+				'tone'  => $guard ? 'on' : 'off',
+			],
+		];
+		?>
+		<style>
+			.nzwp-dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:0 0 20px}
+			.nzwp-dash a,.nzwp-dash div.tile{display:block;background:#fff;border:1px solid #dcdcde;border-radius:6px;
+				padding:16px 18px;text-decoration:none;color:inherit;transition:border-color .15s,box-shadow .15s}
+			.nzwp-dash a:hover{border-color:#2271b1;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+			.nzwp-dash b{display:block;font-size:26px;line-height:1.15;font-variant-numeric:tabular-nums;color:#1d2327}
+			.nzwp-dash b.on{color:#0a5c36}
+			.nzwp-dash b.off{color:#8c8f94}
+			.nzwp-dash span{display:block;margin-top:5px;color:#646970;font-size:12.5px}
+		</style>
+		<div class="nzwp-dash">
+			<?php foreach ( $tiles as $t ) : ?>
+				<?php if ( '' !== $t['href'] ) : ?>
+					<a href="<?php echo esc_url( $t['href'] ); ?>">
+						<b class="<?php echo esc_attr( $t['tone'] ); ?>"><?php echo esc_html( $t['value'] ); ?></b>
+						<span><?php echo esc_html( $t['label'] ); ?></span>
+					</a>
+				<?php else : ?>
+					<div class="tile">
+						<b class="<?php echo esc_attr( $t['tone'] ); ?>"><?php echo esc_html( $t['value'] ); ?></b>
+						<span><?php echo esc_html( $t['label'] ); ?></span>
+					</div>
+				<?php endif; ?>
+			<?php endforeach; ?>
+		</div>
+		<?php
+	}
+
 	/** One line saying what this screen is for. */
 	private static function blurb( string $title ): string {
 		switch ( $title ) {
@@ -155,6 +230,8 @@ final class Admin {
 				return __( 'The standing brief every connected client reads before it does anything.', 'niranzwp' );
 			case __( 'Skills', 'niranzwp' ):
 				return __( 'Instructions for a particular job, loaded when that job comes up.', 'niranzwp' );
+			case __( 'Checkpoints', 'niranzwp' ):
+				return __( 'What was here before the last few changes, and how to put it back.', 'niranzwp' );
 			case __( 'Connections', 'niranzwp' ):
 				return __( 'What is currently connected to this site, and how to disconnect it.', 'niranzwp' );
 			case __( 'Troubleshoot', 'niranzwp' ):
@@ -178,6 +255,8 @@ final class Admin {
 		$host     = Settings::current_domain();
 		$mcp_up   = class_exists( '\WP\MCP\Core\McpAdapter' );
 		$count    = count( self::own_abilities() );
+
+		self::dashboard();
 		?>
 
 		<div class="nzwp-card">
