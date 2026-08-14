@@ -151,7 +151,10 @@ final class Files {
 	}
 
 	/** @return array<string,mixed>|\WP_Error */
-	public static function read( array $input = [] ) {
+	public static function read( mixed $input = [] ) {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		$path = self::resolve( (string) ( $input['path'] ?? '' ) );
 		if ( is_wp_error( $path ) ) {
 			return $path;
@@ -174,7 +177,10 @@ final class Files {
 	}
 
 	/** @return array<string,mixed>|\WP_Error */
-	public static function list_dir( array $input = [] ) {
+	public static function list_dir( mixed $input = [] ) {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		$rel  = (string) ( $input['path'] ?? '' );
 		$path = '' === $rel ? (string) realpath( ABSPATH ) : self::resolve( $rel );
 		if ( is_wp_error( $path ) ) {
@@ -203,7 +209,10 @@ final class Files {
 	}
 
 	/** @return array<string,mixed>|\WP_Error */
-	public static function write( array $input = [] ) {
+	public static function write( mixed $input = [] ) {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		$dry     = ! isset( $input['dry_run'] ) || (bool) $input['dry_run'];
 		$content = (string) ( $input['content'] ?? '' );
 		$path    = self::resolve( (string) ( $input['path'] ?? '' ), false );
@@ -240,7 +249,10 @@ final class Files {
 	}
 
 	/** @return array<string,mixed>|\WP_Error */
-	public static function remove( array $input = [] ) {
+	public static function remove( mixed $input = [] ) {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		$dry  = ! isset( $input['dry_run'] ) || (bool) $input['dry_run'];
 		$path = self::resolve( (string) ( $input['path'] ?? '' ) );
 		if ( is_wp_error( $path ) ) {

@@ -142,7 +142,10 @@ final class SeoFix {
 	 * @param array<string,mixed> $input
 	 * @return array<string,mixed>|\WP_Error
 	 */
-	public static function list_missing( array $input = [] ) {
+	public static function list_missing( mixed $input = [] ) {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		global $wpdb;
 
 		$field     = (string) ( $input['field'] ?? 'description' );
@@ -221,7 +224,10 @@ final class SeoFix {
 	 * @param array<string,mixed> $input
 	 * @return array<string,mixed>|\WP_Error
 	 */
-	public static function set_meta( array $input = [] ) {
+	public static function set_meta( mixed $input = [] ) {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		$items   = (array) ( $input['items'] ?? [] );
 		$dry_run = ! isset( $input['dry_run'] ) || (bool) $input['dry_run'];
 
@@ -293,7 +299,10 @@ final class SeoFix {
 	 * @param array<string,mixed> $input
 	 * @return array<string,mixed>|\WP_Error
 	 */
-	public static function set_alt( array $input = [] ) {
+	public static function set_alt( mixed $input = [] ) {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		$items   = (array) ( $input['items'] ?? [] );
 		$dry_run = ! isset( $input['dry_run'] ) || (bool) $input['dry_run'];
 
@@ -352,7 +361,10 @@ final class SeoFix {
 	 * @param array<string,mixed> $input
 	 * @return array<string,mixed>|\WP_Error
 	 */
-	public static function llms_txt( array $input = [] ) {
+	public static function llms_txt( mixed $input = [] ) {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		$write = (bool) ( $input['write'] ?? false );
 		$limit = min( 200, max( 1, (int) ( $input['limit'] ?? 30 ) ) );
 

@@ -142,7 +142,10 @@ final class Abilities {
 	 * @param array<string,mixed> $input
 	 * @return array<int,array<string,mixed>>
 	 */
-	public static function list_plugins( array $input = [] ): array {
+	public static function list_plugins( mixed $input = [] ): array {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		if ( ! function_exists( 'get_plugins' ) ) {
 			require_once ABSPATH . 'wp-admin/includes/plugin.php';
 		}
@@ -170,7 +173,10 @@ final class Abilities {
 	 * @param array<string,mixed> $input
 	 * @return array<string,mixed>
 	 */
-	public static function autoload_report( array $input = [] ): array {
+	public static function autoload_report( mixed $input = [] ): array {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		global $wpdb;
 
 		$limit = min( 100, max( 1, (int) ( $input['limit'] ?? 20 ) ) );

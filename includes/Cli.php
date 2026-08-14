@@ -175,7 +175,10 @@ final class Cli {
 	 * @param array<string,mixed> $input
 	 * @return array<string,mixed>|\WP_Error
 	 */
-	public static function run( array $input = [] ) {
+	public static function run( mixed $input = [] ) {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		$dry     = ! isset( $input['dry_run'] ) || (bool) $input['dry_run'];
 		$command = trim( (string) ( $input['command'] ?? '' ) );
 

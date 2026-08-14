@@ -124,7 +124,10 @@ final class Seo {
 	 * @param array<string,mixed> $input
 	 * @return array<string,mixed>
 	 */
-	public static function audit( array $input = [] ): array {
+	public static function audit( mixed $input = [] ): array {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		global $wpdb;
 
 		$post_type = sanitize_key( (string) ( $input['post_type'] ?? 'post' ) );

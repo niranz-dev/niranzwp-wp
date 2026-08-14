@@ -111,7 +111,10 @@ final class Blocks {
 	 * @param array<string,mixed> $input
 	 * @return array<string,mixed>
 	 */
-	public static function types( array $input = [] ): array {
+	public static function types( mixed $input = [] ): array {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		$registry = \WP_Block_Type_Registry::get_instance();
 		$search   = strtolower( trim( (string) ( $input['search'] ?? '' ) ) );
 		$ns       = trim( (string) ( $input['namespace'] ?? '' ) );
@@ -153,7 +156,10 @@ final class Blocks {
 	 * @param array<string,mixed> $input
 	 * @return array<string,mixed>|\WP_Error
 	 */
-	public static function type( array $input = [] ) {
+	public static function type( mixed $input = [] ) {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		$name  = (string) ( $input['name'] ?? '' );
 		$block = \WP_Block_Type_Registry::get_instance()->get_registered( $name );
 
@@ -204,7 +210,10 @@ final class Blocks {
 	 * @param array<string,mixed> $input
 	 * @return array<string,mixed>|\WP_Error
 	 */
-	public static function read( array $input = [] ) {
+	public static function read( mixed $input = [] ) {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		$id   = (int) ( $input['id'] ?? 0 );
 		$post = $id ? get_post( $id ) : null;
 
@@ -299,7 +308,10 @@ final class Blocks {
 	 * @param array<string,mixed> $input
 	 * @return array<string,mixed>|\WP_Error
 	 */
-	public static function write( array $input = [] ) {
+	public static function write( mixed $input = [] ) {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		$id     = (int) ( $input['id'] ?? 0 );
 		$blocks = (array) ( $input['blocks'] ?? [] );
 		$mode   = (string) ( $input['mode'] ?? 'append' );

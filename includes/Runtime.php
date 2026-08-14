@@ -73,7 +73,10 @@ final class Runtime {
 	 * @param array<string,mixed> $input
 	 * @return array<string,mixed>|\WP_Error
 	 */
-	public static function evaluate( array $input = [] ) {
+	public static function evaluate( mixed $input = [] ) {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		$code = (string) ( $input['code'] ?? '' );
 
 		if ( '' === trim( $code ) ) {

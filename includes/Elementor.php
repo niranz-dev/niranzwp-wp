@@ -130,7 +130,10 @@ final class Elementor {
 	 * @param array<string,mixed> $input
 	 * @return array<string,mixed>
 	 */
-	public static function status( array $input = [] ): array {
+	public static function status( mixed $input = [] ): array {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		global $wpdb;
 
 		if ( ! self::available() ) {
@@ -222,7 +225,10 @@ final class Elementor {
 	 * @param array<string,mixed> $input
 	 * @return array<string,mixed>|\WP_Error
 	 */
-	public static function read( array $input = [] ) {
+	public static function read( mixed $input = [] ) {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		$id   = (int) ( $input['id'] ?? 0 );
 		$data = self::data( $id );
 		if ( is_wp_error( $data ) ) {
@@ -270,7 +276,10 @@ final class Elementor {
 	 * @param array<string,mixed> $input
 	 * @return array<string,mixed>|\WP_Error
 	 */
-	public static function find( array $input = [] ) {
+	public static function find( mixed $input = [] ) {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		$id   = (int) ( $input['id'] ?? 0 );
 		$data = self::data( $id );
 		if ( is_wp_error( $data ) ) {
@@ -338,7 +347,10 @@ final class Elementor {
 	 * @param array<string,mixed> $input
 	 * @return array<string,mixed>|\WP_Error
 	 */
-	public static function update_setting( array $input = [] ) {
+	public static function update_setting( mixed $input = [] ) {
+		// Core hands the callback whatever arrived in the request, which is an
+		// empty string when a GET ability is called with no input at all.
+		$input = is_array( $input ) ? $input : [];
 		$id         = (int) ( $input['id'] ?? 0 );
 		$element_id = (string) ( $input['element_id'] ?? '' );
 		$setting    = (string) ( $input['setting'] ?? '' );
