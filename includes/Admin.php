@@ -27,6 +27,8 @@ final class Admin {
 		add_submenu_page( self::SLUG, __( 'Configuration', 'niranzwp' ), __( 'Configuration', 'niranzwp' ), CAPABILITY, self::SLUG, [ self::class, 'render_configuration' ] );
 		add_submenu_page( self::SLUG, __( 'Connections', 'niranzwp' ), __( 'Connections', 'niranzwp' ), CAPABILITY, self::SLUG . '-connections', [ Connections::class, 'render' ] );
 		add_submenu_page( self::SLUG, __( 'Abilities', 'niranzwp' ), __( 'Abilities', 'niranzwp' ), CAPABILITY, self::SLUG . '-abilities', [ self::class, 'render_abilities' ] );
+		add_submenu_page( self::SLUG, __( 'Context', 'niranzwp' ), __( 'Context', 'niranzwp' ), CAPABILITY, self::SLUG . '-context', [ ContextAdmin::class, 'render' ] );
+		add_submenu_page( self::SLUG, __( 'Skills', 'niranzwp' ), __( 'Skills', 'niranzwp' ), CAPABILITY, self::SLUG . '-skills', [ SkillsAdmin::class, 'render' ] );
 		add_submenu_page( self::SLUG, __( 'Troubleshoot', 'niranzwp' ), __( 'Troubleshoot', 'niranzwp' ), CAPABILITY, self::SLUG . '-troubleshoot', [ self::class, 'render_troubleshoot' ] );
 	}
 
@@ -61,7 +63,18 @@ final class Admin {
 	private static function styles(): void {
 		?>
 		<style>
-			.nzwp-wrap{max-width:900px}
+			/* The bar spans the content column, so it has to escape the
+			   padding WordPress puts on #wpbody-content. */
+			.nzwp-bar{background:#12326b;margin:0 0 0 -20px;padding:0 20px;box-shadow:inset 0 -1px 0 rgba(255,255,255,.12)}
+			.nzwp-bar-in{display:flex;align-items:center;justify-content:space-between;gap:16px;height:64px;max-width:940px}
+			.nzwp-mark{color:#fff;font-weight:800;font-size:19px;letter-spacing:.14em;line-height:1}
+			.nzwp-bar-meta{display:flex;align-items:center;gap:12px}
+			.nzwp-ver{color:rgba(255,255,255,.62);font-size:12px;font-variant-numeric:tabular-nums}
+			.nzwp-bar .nzwp-on{background:#0e7a53;color:#fff}
+			.nzwp-bar .nzwp-off{background:rgba(255,255,255,.16);color:rgba(255,255,255,.85)}
+			@media(max-width:782px){.nzwp-bar{margin-left:-10px;padding:0 10px}.nzwp-bar-in{height:56px}}
+
+			.nzwp-wrap{max-width:900px;margin-top:22px}
 			.nzwp-head{display:flex;align-items:baseline;gap:12px;margin:0 0 4px}
 			.nzwp-head h1{margin:0;font-size:23px}
 			.nzwp-sub{color:#646970;margin:0 0 20px}
@@ -91,12 +104,31 @@ final class Admin {
 		<?php
 	}
 
+	/**
+	 * A full-width bar carrying the wordmark, then the page title beneath it.
+	 *
+	 * The bar sits outside .wrap so it can run the width of the screen the way
+	 * WordPress's own admin headers do; .wrap's own top margin is cancelled to
+	 * stop a gap opening between the two.
+	 */
 	public static function header( string $title ): void {
 		self::styles();
+		?>
+		<div class="nzwp-bar">
+			<div class="nzwp-bar-in">
+				<span class="nzwp-mark">NIRANZWP</span>
+				<span class="nzwp-bar-meta">
+					<span class="nzwp-badge <?php echo Settings::active() ? 'nzwp-on' : 'nzwp-off'; ?>">
+						<?php echo Settings::active() ? esc_html__( 'Abilities on', 'niranzwp' ) : esc_html__( 'Abilities off', 'niranzwp' ); ?>
+					</span>
+					<span class="nzwp-ver"><?php echo esc_html( VERSION ); ?></span>
+				</span>
+			</div>
+		</div>
+		<?php
 		echo '<div class="wrap nzwp-wrap">';
-		echo '<div class="nzwp-head"><h1>' . esc_html( $title ) . '</h1>';
-		echo '<span class="nzwp-badge ' . ( Settings::active() ? 'nzwp-on">Abilities on' : 'nzwp-off">Abilities off' ) . '</span></div>';
-		echo '<p class="nzwp-sub">NiranzWP ' . esc_html( VERSION ) . ' &middot; <a href="https://niranz.dev" target="_blank" rel="noopener">built by Niranjan</a></p>';
+		echo '<div class="nzwp-head"><h1>' . esc_html( $title ) . '</h1></div>';
+		echo '<p class="nzwp-sub">' . esc_html( get_bloginfo( 'name' ) ) . ' &middot; <a href="https://niranz.dev" target="_blank" rel="noopener">built by Niranjan</a></p>';
 	}
 
 	public static function render_configuration(): void {

@@ -67,6 +67,12 @@ const INPUTS = {
 	'niranzwp/write-file': { path: 'niranzwp-sweep.txt', content: 'sweep', dry_run: true },
 	'niranzwp/delete-file': null,
 
+	'niranzwp/context': {},
+	'niranzwp/skill-list': { include_body: false },
+	'niranzwp/skill-get': { slug: 'alt-text' },
+	'niranzwp/skill-write': { slug: 'sweep-probe', title: 'Sweep probe', description: 'created by the sweep', body: 'temporary' },
+	'niranzwp/skill-delete': '@roundtrip',
+
 	'niranzwp/checkpoint-create': { label: 'sweep', options: ['blogname'] },
 	'niranzwp/checkpoint-list': { limit: 3 },
 	// Exercised for real below, against a checkpoint this sweep created and
@@ -172,6 +178,20 @@ for (const name of discovered) {
 		const removed = await cli(['run', 'niranzwp/checkpoint-delete', '--input', JSON.stringify({ checkpoint_id: id }), '--yes']);
 		results.push({ name: 'niranzwp/checkpoint-delete', status: removed.ok ? 'ok' : 'FAIL', detail: removed.ok ? 'removed' : removed.out.split('\n')[0] });
 	}
+}
+
+/*
+ * Skill round trip: the sweep's own skill-write created `sweep-probe` above, so
+ * delete that rather than whatever the site actually keeps.
+ */
+{
+	const removed = await cli(['run', 'niranzwp/skill-delete', '--input', JSON.stringify({ slug: 'sweep-probe' }), '--yes']);
+	const gone = !(await cli(['run', 'niranzwp/skill-get', '--input', JSON.stringify({ slug: 'sweep-probe' })])).ok;
+	results.push({
+		name: 'niranzwp/skill-delete',
+		status: removed.ok && gone ? 'ok' : 'FAIL',
+		detail: removed.ok && gone ? 'removed, and skill-get no longer finds it' : removed.out.split('\n')[0],
+	});
 }
 
 // An ability registered but absent from INPUTS is the failure mode that matters

@@ -37,6 +37,10 @@ require_once NIRANZWP_DIR . 'includes/Blocks.php';
 require_once NIRANZWP_DIR . 'includes/Elementor.php';
 require_once NIRANZWP_DIR . 'includes/Files.php';
 require_once NIRANZWP_DIR . 'includes/Checkpoint.php';
+require_once NIRANZWP_DIR . 'includes/Skills.php';
+require_once NIRANZWP_DIR . 'includes/SkillsAdmin.php';
+require_once NIRANZWP_DIR . 'includes/Context.php';
+require_once NIRANZWP_DIR . 'includes/ContextAdmin.php';
 require_once NIRANZWP_DIR . 'includes/Runtime.php';
 require_once NIRANZWP_DIR . 'includes/Cli.php';
 require_once NIRANZWP_DIR . 'includes/Mcp.php';
@@ -63,6 +67,9 @@ function boot(): void {
 	}
 
 	Checkpoint::init();
+	Skills::init();
+	SkillsAdmin::init();
+	ContextAdmin::init();
 	Abilities::init();
 	Mcp::init();
 	Connections::init();

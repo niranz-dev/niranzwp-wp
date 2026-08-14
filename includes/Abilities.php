@@ -48,6 +48,8 @@ final class Abilities {
 		Blocks::register( $gate );
 		Elementor::register( $gate );
 		Checkpoint::register( $gate );
+		Context::register( $gate );
+		Skills::register( $gate );
 		Files::register();
 		Runtime::register();
 		Cli::register();
