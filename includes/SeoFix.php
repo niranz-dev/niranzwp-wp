@@ -169,10 +169,26 @@ final class SeoFix {
 				$offset
 			), ARRAY_A );
 
+			// A page count is useless for planning. On a site with forty
+			// thousand images, "count: 20" says nothing about the size of the
+			// job -- SQL_CALC_FOUND_ROWS is deprecated, so this is a second
+			// COUNT with the same WHERE.
+			$total = (int) $wpdb->get_var(
+				"SELECT COUNT(*)
+				   FROM {$wpdb->posts} p
+				   LEFT JOIN {$wpdb->postmeta} m
+				          ON m.post_id = p.ID AND m.meta_key = '_wp_attachment_image_alt'
+				  WHERE p.post_type = 'attachment'
+				    AND p.post_mime_type LIKE 'image/%'
+				    AND ( m.meta_id IS NULL OR m.meta_value = '' )"
+			);
+
 			return [
-				'field'  => 'alt',
-				'count'  => count( $rows ),
-				'offset' => $offset,
+				'field'      => 'alt',
+				'total'      => $total,
+				'returned'   => count( $rows ),
+				'offset'     => $offset,
+				'remaining'  => max( 0, $total - $offset - count( $rows ) ),
 				'items'  => array_map(
 					static fn( array $r ): array => [
 						'id'    => (int) $r['ID'],
@@ -203,11 +219,23 @@ final class SeoFix {
 			$offset
 		), ARRAY_A );
 
+		$total = (int) $wpdb->get_var( $wpdb->prepare(
+			"SELECT COUNT(*)
+			   FROM {$wpdb->posts} p
+			   LEFT JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = %s
+			  WHERE p.post_type = %s AND p.post_status = 'publish'
+			    AND ( m.meta_id IS NULL OR m.meta_value = '' )",
+			$meta_key,
+			$post_type
+		) );
+
 		return [
-			'field'    => $field,
-			'meta_key' => $meta_key,
-			'count'    => count( $rows ),
-			'offset'   => $offset,
+			'field'     => $field,
+			'meta_key'  => $meta_key,
+			'total'     => $total,
+			'returned'  => count( $rows ),
+			'offset'    => $offset,
+			'remaining' => max( 0, $total - $offset - count( $rows ) ),
 			'items'    => array_map(
 				static fn( array $r ): array => [
 					'id'    => (int) $r['ID'],

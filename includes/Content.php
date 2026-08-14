@@ -292,10 +292,31 @@ final class Content {
 				return new \WP_Error( 'niranzwp_unknown_problem', 'Unknown problem type: ' . $problem );
 		}
 
+		// The audit already counts each of these problems site-wide, and it uses
+		// the same conditions, so reuse it rather than adding four more COUNT
+		// queries that could drift from the list queries above.
+		// The audit names these differently from the list ability, which is why
+		// matching them by name silently produced no total at all.
+		$audit_key = [
+			'thin'              => 'thin_content',
+			'duplicate_title'   => 'duplicate_titles',
+			'no_internal_links' => 'no_internal_links',
+			'stale'             => 'stale_content',
+		][ $problem ] ?? $problem;
+
+		$total = null;
+		foreach ( ( self::audit( [ 'post_type' => $post_type, 'thin_words' => $words ] )['issues'] ?? [] ) as $issue ) {
+			if ( ( $issue['key'] ?? '' ) === $audit_key ) {
+				$total = (int) $issue['count'];
+			}
+		}
+
 		return [
-			'problem' => $problem,
-			'count'   => count( (array) $rows ),
-			'offset'  => $offset,
+			'problem'   => $problem,
+			'total'     => $total,
+			'returned'  => count( (array) $rows ),
+			'offset'    => $offset,
+			'remaining' => null === $total ? null : max( 0, $total - $offset - count( (array) $rows ) ),
 			'items'   => array_map(
 				static fn( array $r ): array => [
 					'id'          => (int) $r['ID'],
