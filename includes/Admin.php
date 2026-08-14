@@ -128,7 +128,31 @@ final class Admin {
 		<?php
 		echo '<div class="wrap nzwp-wrap">';
 		echo '<div class="nzwp-head"><h1>' . esc_html( $title ) . '</h1></div>';
-		echo '<p class="nzwp-sub">' . esc_html( get_bloginfo( 'name' ) ) . ' &middot; <a href="https://niranz.dev" target="_blank" rel="noopener">built by Niranjan</a></p>';
+
+		// The bar above already carries the name, version and state. Repeating
+		// the site's own name under every heading was noise.
+		$blurb = self::blurb( $title );
+		if ( '' !== $blurb ) {
+			echo '<p class="nzwp-sub">' . esc_html( $blurb ) . '</p>';
+		}
+	}
+
+	/** One line saying what this screen is for. */
+	private static function blurb( string $title ): string {
+		switch ( $title ) {
+			case __( 'Abilities Hub', 'niranzwp' ):
+				return __( 'Everything a connected client can reach, and a switch on each one.', 'niranzwp' );
+			case __( 'Context', 'niranzwp' ):
+				return __( 'The standing brief every connected client reads before it does anything.', 'niranzwp' );
+			case __( 'Skills', 'niranzwp' ):
+				return __( 'Instructions for a particular job, loaded when that job comes up.', 'niranzwp' );
+			case __( 'Connections', 'niranzwp' ):
+				return __( 'What is currently connected to this site, and how to disconnect it.', 'niranzwp' );
+			case __( 'Troubleshoot', 'niranzwp' ):
+				return __( 'What is wrong, and what to do about it.', 'niranzwp' );
+			default:
+				return __( 'What this site exposes to command-line tools and AI clients.', 'niranzwp' );
+		}
 	}
 
 	public static function render_configuration(): void {
