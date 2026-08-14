@@ -41,6 +41,7 @@ require_once NIRANZWP_DIR . 'includes/Skills.php';
 require_once NIRANZWP_DIR . 'includes/SkillsAdmin.php';
 require_once NIRANZWP_DIR . 'includes/Context.php';
 require_once NIRANZWP_DIR . 'includes/Hub.php';
+require_once NIRANZWP_DIR . 'includes/Recovery.php';
 require_once NIRANZWP_DIR . 'includes/ContextAdmin.php';
 require_once NIRANZWP_DIR . 'includes/Runtime.php';
 require_once NIRANZWP_DIR . 'includes/Cli.php';
@@ -72,6 +73,7 @@ function boot(): void {
 	SkillsAdmin::init();
 	ContextAdmin::init();
 	Hub::init();
+	Recovery::init();
 	Abilities::init();
 	Mcp::init();
 	Connections::init();

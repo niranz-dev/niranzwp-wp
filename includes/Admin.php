@@ -50,7 +50,16 @@ final class Admin {
 
 		$enabled = isset( $_POST['enabled'] );
 		Settings::set_enabled( $enabled );
-		Settings::set_files( isset( $_POST['files'] ) );
+		$files = isset( $_POST['files'] );
+		Settings::set_files( $files );
+
+		// The guard only matters once this plugin can write files, so it is
+		// installed and removed with that switch rather than on activation.
+		if ( $files ) {
+			Recovery::install();
+		} else {
+			Recovery::uninstall();
+		}
 		Settings::set_runtime( isset( $_POST['runtime'] ) );
 		if ( $enabled ) {
 			Settings::remember_domain();

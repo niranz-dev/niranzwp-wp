@@ -150,6 +150,30 @@ final class Files {
 		return '/' . ltrim( str_replace( (string) realpath( ABSPATH ), '', $abs ), '/' );
 	}
 
+	/**
+	 * Does this content parse as PHP?
+	 *
+	 * token_get_all() with TOKEN_PARSE runs the real parser and throws on a
+	 * syntax error, without executing anything. That is the whole check: a
+	 * file that parses may still be wrong, but a file that does not parse is
+	 * certain to be fatal.
+	 *
+	 * @return string|null The parse error, or null when the content is fine.
+	 */
+	private static function php_parse_error( string $rel, string $content ): ?string {
+		$looks_php = str_ends_with( strtolower( $rel ), '.php' ) || str_contains( $content, '<?php' );
+		if ( ! $looks_php || '' === trim( $content ) ) {
+			return null;
+		}
+
+		try {
+			token_get_all( $content, TOKEN_PARSE );
+			return null;
+		} catch ( \ParseError $e ) {
+			return sprintf( '%s on line %d', $e->getMessage(), $e->getLine() );
+		}
+	}
+
 	/** @return array<string,mixed>|\WP_Error */
 	public static function read( mixed $input = [] ) {
 		// Core hands the callback whatever arrived in the request, which is an
@@ -235,6 +259,18 @@ final class Files {
 			$out['status'] = 'unchanged';
 			return $out;
 		}
+		// A PHP file that does not parse takes the whole site down the moment
+		// WordPress loads it, and a checkpoint cannot be restored through a
+		// site that will not boot. Catching it here costs nothing.
+		$parse_error = self::php_parse_error( self::rel( $path ), $content );
+		if ( null !== $parse_error ) {
+			return new \WP_Error(
+				'niranzwp_php_syntax',
+				sprintf( 'That PHP does not parse: %s. Nothing was written.', $parse_error ),
+				[ 'status' => 400 ]
+			);
+		}
+
 		if ( $dry ) {
 			$out['status'] = 'would_write';
 			$out['note']   = 'Nothing was written. Pass dry_run false to apply.';
@@ -245,11 +281,18 @@ final class Files {
 		// fatal -- refusing the write because the undo failed would be worse.
 		$out['checkpoint_id'] = Checkpoint::before_file( ltrim( self::rel( $path ), '/' ), 'write-file' );
 
+		// Record what is being replaced before replacing it. If this request is
+		// the last one the site manages, the guard puts it back on the next
+		// load -- a checkpoint is no use through a site that will not boot.
+		Recovery::arm( $path, $exists ? $before : null );
+
 		if ( false === file_put_contents( $path, $content ) ) {
+			Recovery::disarm();
 			return new \WP_Error( 'niranzwp_write_failed', 'Could not write the file. Check filesystem permissions.' );
 		}
 
-		$out['status'] = 'written';
+		$out['status']    = 'written';
+		$out['guarded']   = Recovery::installed();
 		return $out;
 	}
 
