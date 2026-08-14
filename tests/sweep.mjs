@@ -67,6 +67,10 @@ const INPUTS = {
 	'niranzwp/write-file': { path: 'niranzwp-sweep.txt', content: 'sweep', dry_run: true },
 	'niranzwp/delete-file': null,
 
+	'niranzwp/design-read': {},
+	'niranzwp/design-check': { output: '<style>.a{color:#111111}</style><h1>A real headline</h1>' },
+	'niranzwp/design-write': { name: 'sweep probe', dos: ['keep it plain'], donts: [] },
+
 	'niranzwp/context': {},
 	'niranzwp/skill-list': { include_body: false },
 	'niranzwp/skill-get': { slug: 'alt-text' },
