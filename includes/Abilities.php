@@ -39,6 +39,7 @@ final class Abilities {
 			'niranzwp-gutenberg'   => [ __( 'Gutenberg', 'niranzwp' ), __( 'Block types and reading or writing a post as a block tree.', 'niranzwp' ) ],
 			'niranzwp-elementor'   => [ __( 'Elementor', 'niranzwp' ), __( 'Reading, searching and updating Elementor layouts.', 'niranzwp' ) ],
 			'niranzwp-design'      => [ __( 'Design', 'niranzwp' ), __( 'The palette and rules this site works to, and a check against them.', 'niranzwp' ) ],
+			'niranzwp-performance' => [ __( 'Performance', 'niranzwp' ), __( 'Database weight, what pages load, and image size.', 'niranzwp' ) ],
 			'niranzwp-skills'      => [ __( 'Context and skills', 'niranzwp' ), __( 'The standing brief for this site and the per-job instructions.', 'niranzwp' ) ],
 			'niranzwp-checkpoints' => [ __( 'Checkpoints', 'niranzwp' ), __( 'Snapshots taken before destructive writes, and restoring them.', 'niranzwp' ) ],
 			'niranzwp-filesystem'  => [ __( 'Filesystem', 'niranzwp' ), __( 'Reading and writing files inside the WordPress install.', 'niranzwp' ) ],
@@ -69,6 +70,7 @@ final class Abilities {
 		Context::register( $gate );
 		Skills::register( $gate );
 		Design::register( $gate );
+		Performance::register( $gate );
 		Files::register();
 		Runtime::register();
 		Cli::register();
