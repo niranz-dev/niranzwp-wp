@@ -23,35 +23,93 @@ Pair it with the NiranzWP CLI:
 There is no configuration file to copy. WordPress asks you to approve the
 connection in the browser, and the credential goes to your OS keychain.
 
-Abilities in 0.1.0:
+= What it registers =
 
-* niranzwp/site-info -- site name, URL, WordPress and PHP versions, theme, locale
-* niranzwp/list-plugins -- installed plugins with version and active state
-* niranzwp/autoload-report -- autoloaded option weight and the largest entries
-* niranzwp/purge-cache -- purge LiteSpeed, W3 Total Cache and the object cache
+Thirty-two abilities in seven groups. Twenty-one read, eleven write.
 
-All of them require an administrator. Three of the four are read-only.
+Site -- site-info, list-plugins, autoload-report, purge-cache
+
+SEO and GEO -- seo-audit, geo-check, seo-list-missing, seo-set-meta,
+media-set-alt, geo-llms-txt
+
+Content -- content-audit, content-list, schema-audit
+
+Gutenberg -- block-types, block-type, block-read, block-write
+
+Elementor -- elementor-status, elementor-read, elementor-find,
+elementor-update-setting
+
+Checkpoints -- checkpoint-create, checkpoint-list, checkpoint-restore,
+checkpoint-delete
+
+Filesystem -- read-file, list-directory, write-file, delete-file
+
+Runtime -- evaluate, run-wp-cli, wp-cli-status
+
+Every one of them requires an administrator.
 
 == Security ==
 
-Abilities are OFF after activation and must be switched on deliberately.
+Nothing is exposed after activation. Three switches, all off by default and
+independent of each other, control what is available:
 
-They are also locked to the domain they were enabled on. Restoring a database
-onto a different host does not carry access with it -- abilities must be
-re-enabled there.
+* Abilities -- the read and content abilities
+* Filesystem -- read-file, list-directory, write-file, delete-file
+* Runtime -- evaluate and run-wp-cli
 
-There is deliberately no arbitrary code execution ability in this release. A
-general execute-php endpoint hands full control of the site to anyone holding
-the credential, and that belongs behind a considered decision rather than a
-default.
+Access is locked to the domain it was enabled on. Restoring a database onto a
+different host does not carry access with it; the switches must be thrown
+again there.
+
+= The runtime switch runs arbitrary PHP =
+
+Turning on Runtime gives anyone holding an administrator credential the
+ability to execute arbitrary PHP on this site. That is full control, and it is
+the point of the ability -- but it should be a considered decision, which is
+why it is off by default and separate from everything else. Leave it off
+unless you need it.
+
+= Undo =
+
+write-file, delete-file, block-write and elementor-update-setting take a
+snapshot before they change anything, and return its id with the result. A
+snapshot can be restored later, dry run first.
+
+Snapshots are held in a private custom post type rather than under uploads,
+because uploads is served by the web server and a snapshot contains verbatim
+theme and plugin source.
+
+This is not a substitute for a host backup. It covers what this plugin itself
+touches, and nothing else.
+
+= Containment =
+
+File paths resolve inside ABSPATH and nowhere else. Traversal and symlinks
+that escape the root are rejected. wp-config.php is never readable, writable
+or capturable, and wp-admin and wp-includes cannot be written to.
 
 == Installation ==
 
 1. Upload the ZIP under Plugins > Add New > Upload Plugin, and activate.
-2. Open NiranzWP > Configuration and switch abilities on.
+2. Open NiranzWP > Configuration and switch on what you need. Nothing is
+   available until you do.
 3. Check NiranzWP > Troubleshoot if anything looks wrong.
 
 == Changelog ==
 
+= 1.0.0 =
+* Checkpoints: snapshot and restore files, posts and options, taken
+  automatically before every destructive write.
+* Elementor: read, search and update layouts.
+* Gutenberg: read and write blocks, validated against the block registry.
+* SEO and GEO: audits, missing-field listings, batch meta and alt text.
+* Content: thin, duplicate-title, orphaned and stale content audits.
+* Filesystem and runtime abilities, behind their own switches.
+* Fixed: abilities crashed when called with no input, because core passes an
+  empty string rather than an array in that case.
+* Corrected a claim in this readme that the plugin shipped no code execution
+  ability. It does, behind the Runtime switch, which is off by default.
+
 = 0.1.0 =
-* First release: four abilities, Configuration / Abilities / Troubleshoot screens.
+* First release: four abilities, Configuration / Abilities / Troubleshoot
+  screens.
