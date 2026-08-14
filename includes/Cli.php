@@ -35,7 +35,7 @@ final class Cli {
 			[
 				'label'               => __( 'Run WP-CLI', 'niranzwp' ),
 				'description'         => __( 'Runs a WP-CLI command against this installation and returns stdout, stderr and the exit code. Reports what it would run unless dry_run is false. Requires the wp binary and shell execution on the host.', 'niranzwp' ),
-				'category'            => 'niranzwp',
+				'category'            => 'niranzwp-runtime',
 				'input_schema'        => [
 					'type'       => 'object',
 					'properties' => [
@@ -62,7 +62,7 @@ final class Cli {
 			[
 				'label'               => __( 'WP-CLI status', 'niranzwp' ),
 				'description'         => __( 'Reports whether WP-CLI can run on this host: shell availability, the resolved wp binary and its version.', 'niranzwp' ),
-				'category'            => 'niranzwp',
+				'category'            => 'niranzwp-runtime',
 				'input_schema'        => [ 'type' => 'object', 'properties' => (object) [] ],
 				'output_schema'       => [ 'type' => 'object' ],
 				'permission_callback' => [ self::class, 'permission' ],

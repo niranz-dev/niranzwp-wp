@@ -26,7 +26,7 @@ final class Admin {
 		add_menu_page( 'NiranzWP', 'NiranzWP', CAPABILITY, self::SLUG, [ self::class, 'render_configuration' ], 'dashicons-rest-api', 76 );
 		add_submenu_page( self::SLUG, __( 'Configuration', 'niranzwp' ), __( 'Configuration', 'niranzwp' ), CAPABILITY, self::SLUG, [ self::class, 'render_configuration' ] );
 		add_submenu_page( self::SLUG, __( 'Connections', 'niranzwp' ), __( 'Connections', 'niranzwp' ), CAPABILITY, self::SLUG . '-connections', [ Connections::class, 'render' ] );
-		add_submenu_page( self::SLUG, __( 'Abilities', 'niranzwp' ), __( 'Abilities', 'niranzwp' ), CAPABILITY, self::SLUG . '-abilities', [ self::class, 'render_abilities' ] );
+		add_submenu_page( self::SLUG, __( 'Abilities Hub', 'niranzwp' ), __( 'Abilities Hub', 'niranzwp' ), CAPABILITY, self::SLUG . '-abilities', [ Hub::class, 'render' ] );
 		add_submenu_page( self::SLUG, __( 'Context', 'niranzwp' ), __( 'Context', 'niranzwp' ), CAPABILITY, self::SLUG . '-context', [ ContextAdmin::class, 'render' ] );
 		add_submenu_page( self::SLUG, __( 'Skills', 'niranzwp' ), __( 'Skills', 'niranzwp' ), CAPABILITY, self::SLUG . '-skills', [ SkillsAdmin::class, 'render' ] );
 		add_submenu_page( self::SLUG, __( 'Troubleshoot', 'niranzwp' ), __( 'Troubleshoot', 'niranzwp' ), CAPABILITY, self::SLUG . '-troubleshoot', [ self::class, 'render_troubleshoot' ] );

@@ -47,7 +47,7 @@ final class Runtime {
 			[
 				'label'               => __( 'Evaluate PHP', 'niranzwp' ),
 				'description'         => __( 'Evaluates PHP inside the loaded WordPress runtime and returns the value it produces, anything it printed, and any error it raised. Equivalent to "wp eval". This is full control of the site: enable it on development and staging only.', 'niranzwp' ),
-				'category'            => 'niranzwp',
+				'category'            => 'niranzwp-runtime',
 				'input_schema'        => [
 					'type'       => 'object',
 					'properties' => [

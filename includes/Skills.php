@@ -125,6 +125,64 @@ final class Skills {
 	/* ----------------------------------------------------------------- data */
 
 	/**
+	 * Skills shipped with the plugin. They are read from disk on every call and
+	 * are not editable here -- a copy in the database would drift away from the
+	 * file the next time the plugin updates.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	public static function built_in( bool $with_body = false ): array {
+		$dir = NIRANZWP_DIR . 'skills/';
+		if ( ! is_dir( $dir ) ) {
+			return [];
+		}
+
+		$out = [];
+		foreach ( (array) glob( $dir . '*.md' ) as $file ) {
+			$raw    = (string) file_get_contents( (string) $file );
+			$parsed = self::parse( $raw );
+			$slug   = basename( (string) $file, '.md' );
+
+			$row = [
+				'slug'        => $slug,
+				'title'       => '' !== $parsed['name'] ? $parsed['name'] : $slug,
+				'description' => $parsed['description'],
+				'source'      => 'built-in',
+				'updated'     => gmdate( 'Y-m-d H:i:s', (int) filemtime( (string) $file ) ),
+				'bytes'       => strlen( $parsed['body'] ),
+			];
+			if ( $with_body ) {
+				$row['body'] = $parsed['body'];
+			}
+			$out[] = $row;
+		}
+
+		usort( $out, static fn( array $a, array $b ): int => strcmp( $a['slug'], $b['slug'] ) );
+		return $out;
+	}
+
+	/**
+	 * Everything on offer: what the site wrote, plus what shipped with the
+	 * plugin. A written skill with the same slug wins, so a built-in can be
+	 * overridden rather than only accepted or ignored.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	public static function catalogue( bool $with_body = false ): array {
+		$written = self::all( $with_body );
+		$slugs   = array_column( $written, 'slug' );
+
+		foreach ( self::built_in( $with_body ) as $b ) {
+			if ( ! in_array( $b['slug'], $slugs, true ) ) {
+				$written[] = $b;
+			}
+		}
+
+		usort( $written, static fn( array $a, array $b ): int => strcmp( $a['slug'], $b['slug'] ) );
+		return $written;
+	}
+
+	/**
 	 * @return array<int,array<string,mixed>>
 	 */
 	public static function all( bool $with_body = false ): array {
@@ -249,7 +307,7 @@ final class Skills {
 		wp_register_ability( 'niranzwp/skill-list', [
 			'label'               => __( 'List skills', 'niranzwp' ),
 			'description'         => __( 'Lists the written instructions this site keeps for anything working on it. Read these before editing content, writing alt text or changing SEO fields, and follow them.', 'niranzwp' ),
-			'category'            => 'niranzwp',
+			'category'            => 'niranzwp-skills',
 			'input_schema'        => [
 				'type'       => 'object',
 				'properties' => [
@@ -265,7 +323,7 @@ final class Skills {
 		wp_register_ability( 'niranzwp/skill-get', [
 			'label'               => __( 'Get skill', 'niranzwp' ),
 			'description'         => __( 'Returns the full text of one skill by slug.', 'niranzwp' ),
-			'category'            => 'niranzwp',
+			'category'            => 'niranzwp-skills',
 			'input_schema'        => [
 				'type'       => 'object',
 				'properties' => [ 'slug' => [ 'type' => 'string' ] ],
@@ -280,7 +338,7 @@ final class Skills {
 		wp_register_ability( 'niranzwp/skill-write', [
 			'label'               => __( 'Write skill', 'niranzwp' ),
 			'description'         => __( 'Creates or replaces a skill. Snapshots the previous version first.', 'niranzwp' ),
-			'category'            => 'niranzwp',
+			'category'            => 'niranzwp-skills',
 			'input_schema'        => [
 				'type'       => 'object',
 				'properties' => [
@@ -300,7 +358,7 @@ final class Skills {
 		wp_register_ability( 'niranzwp/skill-delete', [
 			'label'               => __( 'Delete skill', 'niranzwp' ),
 			'description'         => __( 'Permanently removes a skill. Snapshots it first.', 'niranzwp' ),
-			'category'            => 'niranzwp',
+			'category'            => 'niranzwp-skills',
 			'input_schema'        => [
 				'type'       => 'object',
 				'properties' => [ 'slug' => [ 'type' => 'string' ] ],
@@ -316,14 +374,22 @@ final class Skills {
 	/** @return array<int,array<string,mixed>> */
 	public static function ability_list( mixed $input = [] ): array {
 		$input = is_array( $input ) ? $input : [];
-		return self::all( (bool) ( $input['include_body'] ?? false ) );
+		return self::catalogue( (bool) ( $input['include_body'] ?? false ) );
 	}
 
 	/** @return array<string,mixed>|\WP_Error */
 	public static function ability_get( mixed $input = [] ) {
 		$input = is_array( $input ) ? $input : [];
-		$post  = self::find( (string) ( $input['slug'] ?? '' ) );
+		$slug  = (string) ( $input['slug'] ?? '' );
+		$post  = self::find( $slug );
+
 		if ( ! $post ) {
+			// Fall back to a built-in of the same name before giving up.
+			foreach ( self::built_in( true ) as $b ) {
+				if ( $b['slug'] === $slug ) {
+					return $b;
+				}
+			}
 			return new \WP_Error( 'niranzwp_not_found', 'No skill with that slug. Use skill-list to see what exists.' );
 		}
 		return [
@@ -331,6 +397,7 @@ final class Skills {
 			'title'       => $post->post_title,
 			'description' => (string) get_post_meta( $post->ID, '_niranzwp_description', true ),
 			'updated'     => $post->post_modified_gmt,
+			'source'      => 'site',
 			'body'        => $post->post_content,
 		];
 	}

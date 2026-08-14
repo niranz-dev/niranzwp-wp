@@ -37,7 +37,7 @@ final class Content {
 			[
 				'label'               => __( 'Content audit', 'niranzwp' ),
 				'description'         => __( 'Reports content-quality problems across the site: thin posts, duplicate titles, posts with no internal links out, and posts never updated since publication.', 'niranzwp' ),
-				'category'            => 'niranzwp',
+				'category'            => 'niranzwp-content',
 				'input_schema'        => [
 					'type'       => 'object',
 					'properties' => [
@@ -57,7 +57,7 @@ final class Content {
 			[
 				'label'               => __( 'List content problems', 'niranzwp' ),
 				'description'         => __( 'Returns the actual posts behind a content-audit finding, with IDs, titles, URLs and the measured value, so they can be fixed one by one.', 'niranzwp' ),
-				'category'            => 'niranzwp',
+				'category'            => 'niranzwp-content',
 				'input_schema'        => [
 					'type'       => 'object',
 					'properties' => [
@@ -80,7 +80,7 @@ final class Content {
 			[
 				'label'               => __( 'Schema audit', 'niranzwp' ),
 				'description'         => __( 'Reports which published posts carry structured data and which schema types are in use. Reads Rank Math or Yoast schema meta.', 'niranzwp' ),
-				'category'            => 'niranzwp',
+				'category'            => 'niranzwp-content',
 				'input_schema'        => [
 					'type'       => 'object',
 					'properties' => [ 'post_type' => [ 'type' => 'string', 'default' => 'post' ] ],

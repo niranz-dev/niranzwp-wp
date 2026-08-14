@@ -42,7 +42,7 @@ final class Seo {
 			[
 				'label'               => __( 'SEO audit', 'niranzwp' ),
 				'description'         => __( 'Counts SEO gaps across the whole site: posts missing meta descriptions, SEO titles or focus keywords, images missing alt text, noindex pages, and content bloat. Detects Rank Math, Yoast or SEOPress automatically.', 'niranzwp' ),
-				'category'            => 'niranzwp',
+				'category'            => 'niranzwp-seo',
 				'input_schema'        => [
 					'type'       => 'object',
 					'properties' => [
@@ -61,7 +61,7 @@ final class Seo {
 			[
 				'label'               => __( 'GEO check', 'niranzwp' ),
 				'description'         => __( 'Checks how reachable this site is by AI answer engines: whether AI crawlers are allowed in robots.txt and whether a sitemap is discoverable. Follows Google guidance, so it does not treat llms.txt as a ranking factor.', 'niranzwp' ),
-				'category'            => 'niranzwp',
+				'category'            => 'niranzwp-seo',
 				'input_schema'        => [ 'type' => 'object', 'properties' => (object) [] ],
 				'output_schema'       => [ 'type' => 'object' ],
 				'permission_callback' => $gate,

@@ -41,7 +41,7 @@ final class Files {
 		wp_register_ability( 'niranzwp/read-file', [
 			'label'               => __( 'Read file', 'niranzwp' ),
 			'description'         => __( 'Reads a file inside the WordPress install. wp-config.php is refused because it holds database credentials and salts.', 'niranzwp' ),
-			'category'            => 'niranzwp',
+			'category'            => 'niranzwp-filesystem',
 			'input_schema'        => [
 				'type'       => 'object',
 				'properties' => [ 'path' => [ 'type' => 'string' ] ],
@@ -56,7 +56,7 @@ final class Files {
 		wp_register_ability( 'niranzwp/list-directory', [
 			'label'               => __( 'List directory', 'niranzwp' ),
 			'description'         => __( 'Lists files and directories inside the WordPress install.', 'niranzwp' ),
-			'category'            => 'niranzwp',
+			'category'            => 'niranzwp-filesystem',
 			'input_schema'        => [
 				'type'       => 'object',
 				'properties' => [ 'path' => [ 'type' => 'string', 'default' => '' ] ],
@@ -70,7 +70,7 @@ final class Files {
 		wp_register_ability( 'niranzwp/write-file', [
 			'label'               => __( 'Write file', 'niranzwp' ),
 			'description'         => __( 'Writes a file inside the WordPress install. Reports what would change unless dry_run is false.', 'niranzwp' ),
-			'category'            => 'niranzwp',
+			'category'            => 'niranzwp-filesystem',
 			'input_schema'        => [
 				'type'       => 'object',
 				'properties' => [
@@ -89,7 +89,7 @@ final class Files {
 		wp_register_ability( 'niranzwp/delete-file', [
 			'label'               => __( 'Delete file', 'niranzwp' ),
 			'description'         => __( 'Deletes a single file inside the WordPress install. Core directories and wp-config.php are refused. Previews unless dry_run is false.', 'niranzwp' ),
-			'category'            => 'niranzwp',
+			'category'            => 'niranzwp-filesystem',
 			'input_schema'        => [
 				'type'       => 'object',
 				'properties' => [

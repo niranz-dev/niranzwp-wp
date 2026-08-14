@@ -58,8 +58,9 @@ final class Context {
 				static fn( array $s ): array => [
 					'slug'        => $s['slug'],
 					'description' => $s['description'],
+					'source'      => $s['source'] ?? 'site',
 				],
-				Skills::all()
+				Skills::catalogue()
 			),
 		];
 	}
@@ -150,7 +151,7 @@ final class Context {
 		wp_register_ability( 'niranzwp/context', [
 			'label'               => __( 'Site context', 'niranzwp' ),
 			'description'         => __( 'The standing brief for this site: what is installed, which plugins own which fields, what is switched on, the rules the owner set, and the skills available. Call this first, before doing anything else on this site.', 'niranzwp' ),
-			'category'            => 'niranzwp',
+			'category'            => 'niranzwp-skills',
 			'input_schema'        => [ 'type' => 'object', 'properties' => (object) [] ],
 			'output_schema'       => [ 'type' => 'object' ],
 			'permission_callback' => $gate,

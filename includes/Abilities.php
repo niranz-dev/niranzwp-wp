@@ -24,14 +24,31 @@ final class Abilities {
 		add_action( 'wp_abilities_api_init', [ self::class, 'register' ] );
 	}
 
+	/**
+	 * One category per group, so the Abilities Hub can be read at a glance and
+	 * a whole area can be switched off in one action. A single flat category
+	 * turned the screen into an undifferentiated list of forty rows.
+	 *
+	 * @return array<string,array{0:string,1:string}>
+	 */
+	private static function categories(): array {
+		return [
+			'niranzwp-site'        => [ __( 'Site', 'niranzwp' ), __( 'Version, plugins, autoload weight, caches.', 'niranzwp' ) ],
+			'niranzwp-seo'         => [ __( 'SEO and GEO', 'niranzwp' ), __( 'Audits, missing fields, meta and alt text, AI crawler access.', 'niranzwp' ) ],
+			'niranzwp-content'     => [ __( 'Content', 'niranzwp' ), __( 'Thin, duplicate, orphaned and stale content; schema coverage.', 'niranzwp' ) ],
+			'niranzwp-gutenberg'   => [ __( 'Gutenberg', 'niranzwp' ), __( 'Block types and reading or writing a post as a block tree.', 'niranzwp' ) ],
+			'niranzwp-elementor'   => [ __( 'Elementor', 'niranzwp' ), __( 'Reading, searching and updating Elementor layouts.', 'niranzwp' ) ],
+			'niranzwp-skills'      => [ __( 'Context and skills', 'niranzwp' ), __( 'The standing brief for this site and the per-job instructions.', 'niranzwp' ) ],
+			'niranzwp-checkpoints' => [ __( 'Checkpoints', 'niranzwp' ), __( 'Snapshots taken before destructive writes, and restoring them.', 'niranzwp' ) ],
+			'niranzwp-filesystem'  => [ __( 'Filesystem', 'niranzwp' ), __( 'Reading and writing files inside the WordPress install.', 'niranzwp' ) ],
+			'niranzwp-runtime'     => [ __( 'Code execution', 'niranzwp' ), __( 'PHP evaluation and WP-CLI. Full control of the site.', 'niranzwp' ) ],
+		];
+	}
+
 	public static function register_category(): void {
-		wp_register_ability_category(
-			'niranzwp',
-			[
-				'label'       => __( 'NiranzWP', 'niranzwp' ),
-				'description' => __( 'Site inspection and maintenance abilities.', 'niranzwp' ),
-			]
-		);
+		foreach ( self::categories() as $slug => [ $label, $description ] ) {
+			wp_register_ability_category( $slug, [ 'label' => $label, 'description' => $description ] );
+		}
 	}
 
 	/** Every ability shares this gate. */
@@ -59,7 +76,7 @@ final class Abilities {
 			[
 				'label'               => __( 'Site information', 'niranzwp' ),
 				'description'         => __( 'Returns the site name, URL, WordPress and PHP versions, active theme and locale.', 'niranzwp' ),
-				'category'            => 'niranzwp',
+				'category'            => 'niranzwp-site',
 				'input_schema'        => [ 'type' => 'object', 'properties' => (object) [] ],
 				'output_schema'       => [ 'type' => 'object' ],
 				'permission_callback' => $gate,
@@ -73,7 +90,7 @@ final class Abilities {
 			[
 				'label'               => __( 'List plugins', 'niranzwp' ),
 				'description'         => __( 'Lists installed plugins with version and active state. Optionally only the active ones.', 'niranzwp' ),
-				'category'            => 'niranzwp',
+				'category'            => 'niranzwp-site',
 				'input_schema'        => [
 					'type'       => 'object',
 					'properties' => [
@@ -92,7 +109,7 @@ final class Abilities {
 			[
 				'label'               => __( 'Autoload report', 'niranzwp' ),
 				'description'         => __( 'Reports total autoloaded option size and the largest entries. Autoloaded options are read on every request, so bloat here slows the whole site.', 'niranzwp' ),
-				'category'            => 'niranzwp',
+				'category'            => 'niranzwp-site',
 				'input_schema'        => [
 					'type'       => 'object',
 					'properties' => [
@@ -111,7 +128,7 @@ final class Abilities {
 			[
 				'label'               => __( 'Purge caches', 'niranzwp' ),
 				'description'         => __( 'Purges LiteSpeed, W3 Total Cache and WP object cache where present. Does not reach an external CDN such as Cloudflare.', 'niranzwp' ),
-				'category'            => 'niranzwp',
+				'category'            => 'niranzwp-site',
 				'input_schema'        => [ 'type' => 'object', 'properties' => (object) [] ],
 				'output_schema'       => [ 'type' => 'object' ],
 				'permission_callback' => $gate,

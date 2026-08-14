@@ -26,7 +26,7 @@ final class SeoFix {
 			[
 				'label'               => __( 'List posts missing SEO data', 'niranzwp' ),
 				'description'         => __( 'Returns a page of published posts that are missing a given SEO field (description, title, focus keyword, alt text or featured image), with IDs, titles and URLs so they can be fixed.', 'niranzwp' ),
-				'category'            => 'niranzwp',
+				'category'            => 'niranzwp-seo',
 				'input_schema'        => [
 					'type'       => 'object',
 					'properties' => [
@@ -48,7 +48,7 @@ final class SeoFix {
 			[
 				'label'               => __( 'Set SEO meta', 'niranzwp' ),
 				'description'         => __( 'Sets the SEO description, title or focus keyword on one or more posts. Previews by default: pass dry_run false to actually write.', 'niranzwp' ),
-				'category'            => 'niranzwp',
+				'category'            => 'niranzwp-seo',
 				'input_schema'        => [
 					'type'       => 'object',
 					'properties' => [
@@ -79,7 +79,7 @@ final class SeoFix {
 			[
 				'label'               => __( 'Set image alt text', 'niranzwp' ),
 				'description'         => __( 'Sets alt text on one or more image attachments. Previews by default: pass dry_run false to actually write.', 'niranzwp' ),
-				'category'            => 'niranzwp',
+				'category'            => 'niranzwp-seo',
 				'input_schema'        => [
 					'type'       => 'object',
 					'properties' => [
@@ -109,7 +109,7 @@ final class SeoFix {
 			[
 				'label'               => __( 'Generate llms.txt', 'niranzwp' ),
 				'description'         => __( 'Builds an llms.txt listing this site\'s pages and recent articles. Note that Google lists llms.txt among practices that do not affect AI search, and server-log studies show AI crawlers do not request it; this exists because some people want the file, not because it is known to help. Returns the content by default: pass write true to save it.', 'niranzwp' ),
-				'category'            => 'niranzwp',
+				'category'            => 'niranzwp-seo',
 				'input_schema'        => [
 					'type'       => 'object',
 					'properties' => [
