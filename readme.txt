@@ -25,12 +25,13 @@ connection in the browser, and the credential goes to your OS keychain.
 
 = What it registers =
 
-Thirty-two abilities in seven groups. Twenty-one read, eleven write.
+Forty-seven abilities in eleven groups.
 
 Site -- site-info, list-plugins, autoload-report, purge-cache
 
 SEO and GEO -- seo-audit, geo-check, seo-list-missing, seo-set-meta,
-media-set-alt, geo-llms-txt
+media-set-alt, geo-llms-txt, seo-priorities, internal-link-suggest,
+content-refresh
 
 Content -- content-audit, content-list, schema-audit
 
@@ -38,6 +39,13 @@ Gutenberg -- block-types, block-type, block-read, block-write
 
 Elementor -- elementor-status, elementor-read, elementor-find,
 elementor-update-setting
+
+Design -- design-read, design-check, design-write
+
+Performance -- db-report, db-cleanup, asset-audit, image-weight
+
+Context and skills -- context, skill-list, skill-get, skill-write,
+skill-delete
 
 Checkpoints -- checkpoint-create, checkpoint-list, checkpoint-restore,
 checkpoint-delete
