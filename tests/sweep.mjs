@@ -101,7 +101,7 @@ const INPUTS = {
 /** Find a page built with Elementor, so those abilities get a real target. */
 async function elementorPageId() {
 	const r = await cli(['run', 'niranzwp/evaluate', '--input', JSON.stringify({
-		code: "global $wpdb; return (int) $wpdb->get_var( \"SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_elementor_data' LIMIT 1\" );",
+		code: "global $wpdb; return (int) $wpdb->get_var( \"SELECT pm.post_id FROM {$wpdb->postmeta} pm JOIN {$wpdb->posts} p ON p.ID = pm.post_id WHERE pm.meta_key = '_elementor_data' AND p.post_type IN ('page','post') AND p.post_status = 'publish' ORDER BY pm.post_id ASC LIMIT 1\" );",
 	}), '--yes']);
 	if (!r.ok) return null;
 	try {
@@ -258,7 +258,7 @@ for (const name of discovered) {
 		const missing = !(await cli(['run', 'niranzwp/read-file', '--input', JSON.stringify({ path })])).ok;
 
 		const ckpt = json(gone)?.checkpoint_id;
-		const undone = await restore(ckpt);
+			const undone = await restore(ckpt);
 		const readBack = json(await cli(['run', 'niranzwp/read-file', '--input', JSON.stringify({ path })]));
 		const restored = readBack?.content === body;
 
@@ -286,26 +286,40 @@ for (const name of discovered) {
 		if (!target?.element_id) {
 			results.push({ name: 'niranzwp/elementor-update-setting', status: 'skip', detail: 'no heading widget to change' });
 		} else {
-			const read = (o) => JSON.stringify(o?.elements ?? o?.tree ?? o);
-			const before = read(json(await cli(['run', 'niranzwp/elementor-read', '--input', JSON.stringify({ id: elementorId, settings: true })])));
+			/*
+			 * elementor-read reports which settings a widget has, not their
+			 * values, so comparing that tree never shows a change however
+			 * thoroughly the layout was rewritten. The update ability returns
+			 * the value it replaced and the one it wrote, and a dry run reads
+			 * the current value back without touching anything -- so the
+			 * assertions are on values rather than on shape.
+			 */
+			const value = `sweep ${Date.now()}`;
 
-			const set = await cli(['run', 'niranzwp/elementor-update-setting', '--input', JSON.stringify({
-				id: elementorId, element_id: target.element_id, setting: 'title', value: 'changed by the sweep', dry_run: false,
-			}), '--yes']);
+			const set = json(await cli(['run', 'niranzwp/elementor-update-setting', '--input', JSON.stringify({
+				id: elementorId, element_id: target.element_id, setting: 'title', value, dry_run: false,
+			}), '--yes']));
 
-			const after = read(json(await cli(['run', 'niranzwp/elementor-read', '--input', JSON.stringify({ id: elementorId, settings: true })])));
-			const changed = before !== after;
-			const ckpt = json(set)?.checkpoint_id;
+			const wrote = set?.after === value && set?.before !== value;
+			const ckpt = set?.checkpoint_id ?? null;
 
-			const undone = await restore(ckpt);
-			const back = read(json(await cli(['run', 'niranzwp/elementor-read', '--input', JSON.stringify({ id: elementorId, settings: true })])));
+			const undo = ckpt
+				? await cli(['run', 'niranzwp/checkpoint-restore', '--input', JSON.stringify({ checkpoint_id: ckpt, dry_run: false }), '--yes'])
+				: { ok: false, out: 'no checkpoint id was returned' };
+			const undone = undo.ok;
+
+			const now = json(await cli(['run', 'niranzwp/elementor-update-setting', '--input', JSON.stringify({
+				id: elementorId, element_id: target.element_id, setting: 'title', value: 'probe', dry_run: true,
+			}), '--yes']));
+
+			const restored = now?.before === set?.before;
 
 			results.push({
 				name: 'niranzwp/elementor-update-setting',
-				status: set.ok && changed && undone && back === before ? 'ok' : 'FAIL',
-				detail: set.ok && changed && undone && back === before
-					? 'changed a heading, verified, restored the layout'
-					: `set=${set.ok} changed=${changed} undone=${undone} restored=${back === before}`,
+				status: wrote && undone && restored ? 'ok' : 'FAIL',
+				detail: wrote && undone && restored
+					? `set "${set.before}" to "${set.after}", restored it`
+					: `wrote=${wrote} ckpt=${ckpt ?? 'none'} restored=${restored} — undo said: ${undo.out.trim().split('\n')[0]}`,
 			});
 		}
 	}

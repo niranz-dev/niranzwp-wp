@@ -242,9 +242,32 @@ final class Checkpoint {
 
 			$fields       = (array) ( $p['fields'] ?? [] );
 			$fields['ID'] = $pid;
+
+			/*
+			 * wp_update_post() merges the post's existing page_template into
+			 * the update and then validates it against the theme. Templates
+			 * registered by plugins -- Elementor's elementor_canvas -- come in
+			 * through a filter that is not reliably present in a REST request,
+			 * so restoring an Elementor page failed with "Invalid page
+			 * template" even though the template was already on the post.
+			 * Whatever template the post carries right now is by definition
+			 * acceptable to put back, so it is allowed through explicitly.
+			 */
+			$current_template = (string) get_post_meta( $pid, '_wp_page_template', true );
+			$allow_template   = static function ( array $templates ) use ( $current_template ): array {
+				if ( '' !== $current_template && 'default' !== $current_template ) {
+					$templates[ $current_template ] = $current_template;
+				}
+				return $templates;
+			};
+			add_filter( 'theme_page_templates', $allow_template );
+
 			// wp_update_post() unslashes, so the payload has to be slashed
 			// first or every quote in the content is stripped.
 			$r = wp_update_post( wp_slash( $fields ), true );
+
+			remove_filter( 'theme_page_templates', $allow_template );
+
 			if ( is_wp_error( $r ) ) {
 				return $r;
 			}

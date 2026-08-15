@@ -109,8 +109,21 @@ final class Elementor {
 
 	/** @return array<string,mixed>|\WP_Error */
 	private static function data( int $post_id ) {
-		if ( ! get_post( $post_id ) ) {
+		$post = get_post( $post_id );
+		if ( ! $post ) {
 			return new \WP_Error( 'niranzwp_not_found', 'No post with ID ' . $post_id );
+		}
+
+		// Elementor copies _elementor_data onto revisions, so a revision id
+		// looks perfectly valid here -- and editing one silently changes
+		// history while the caller believes they edited the page. Refuse and
+		// name the real post instead.
+		$parent = wp_is_post_revision( $post_id );
+		if ( $parent ) {
+			return new \WP_Error(
+				'niranzwp_is_revision',
+				sprintf( 'Post %d is a revision of post %d. Work on %d instead.', $post_id, $parent, $parent )
+			);
 		}
 
 		$raw = get_post_meta( $post_id, '_elementor_data', true );

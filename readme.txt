@@ -4,7 +4,7 @@ Tags: cli, rest-api, abilities, seo, automation
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.0.0
+Stable tag: 1.1.0
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -96,6 +96,23 @@ or capturable, and wp-admin and wp-includes cannot be written to.
 3. Check NiranzWP > Troubleshoot if anything looks wrong.
 
 == Changelog ==
+
+= 1.1.0 =
+* Design: read the theme's palette, and check built HTML/CSS against it and
+  against the shapes generated design keeps landing on.
+* Performance: database report and cleanup, asset audit fetched as a visitor
+  would, image weight.
+* SEO planning: every audit joined into one prioritised list, internal link
+  suggestions with real anchors, and old posts worth refreshing.
+* Self-hosted updates, verified against a SHA-256 in the manifest.
+* View details modal on the Plugins screen.
+* Fixed: restoring a checkpoint of an Elementor page failed with "Invalid
+  page template" when the template came from a plugin filter absent in REST.
+* Fixed: Elementor abilities silently operated on revisions, because
+  Elementor copies its layout meta onto them. A revision id is now refused
+  by name.
+* Every ability, including the destructive ones, is exercised by the sweep;
+  nothing is skipped.
 
 = 1.0.0 =
 * Checkpoints: snapshot and restore files, posts and options, taken
