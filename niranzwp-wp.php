@@ -36,6 +36,7 @@ require_once NIRANZWP_DIR . 'includes/Content.php';
 require_once NIRANZWP_DIR . 'includes/Blocks.php';
 require_once NIRANZWP_DIR . 'includes/Elementor.php';
 require_once NIRANZWP_DIR . 'includes/Files.php';
+require_once NIRANZWP_DIR . 'includes/Upload.php';
 require_once NIRANZWP_DIR . 'includes/Checkpoint.php';
 require_once NIRANZWP_DIR . 'includes/Skills.php';
 require_once NIRANZWP_DIR . 'includes/SkillsAdmin.php';
@@ -80,6 +81,7 @@ function boot(): void {
 	ContextAdmin::init();
 	Hub::init();
 	Recovery::init();
+	Upload::init();
 	CheckpointAdmin::init();
 	Abilities::init();
 	Mcp::init();

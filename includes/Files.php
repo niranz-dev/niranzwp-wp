@@ -160,6 +160,24 @@ final class Files {
 	 *
 	 * @return string|null The parse error, or null when the content is fine.
 	 */
+	/**
+	 * Exposed so the upload endpoint can apply the same gate to a file it
+	 * received rather than one it was handed as a string.
+	 */
+	public static function parse_error( string $rel, string $content ): ?string {
+		return self::php_parse_error( $rel, $content );
+	}
+
+	/**
+	 * Exposed for the same reason: an upload has to land somewhere inside the
+	 * install, decided by the same resolver and not by the caller.
+	 *
+	 * @return string|\WP_Error
+	 */
+	public static function resolve_path( string $path, bool $must_exist = true ) {
+		return self::resolve( $path, $must_exist );
+	}
+
 	private static function php_parse_error( string $rel, string $content ): ?string {
 		$looks_php = str_ends_with( strtolower( $rel ), '.php' ) || str_contains( $content, '<?php' );
 		if ( ! $looks_php || '' === trim( $content ) ) {

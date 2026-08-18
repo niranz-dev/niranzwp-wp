@@ -73,6 +73,7 @@ final class Abilities {
 		Performance::register( $gate );
 		SeoPlan::register( $gate );
 		Files::register();
+		Upload::register();
 		Runtime::register();
 		Cli::register();
 
