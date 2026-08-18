@@ -109,14 +109,31 @@ final class Files {
 
 		register_ability( 'niranzwp/write-file', [
 			'label'               => __( 'Write file', 'niranzwp' ),
-			'description'         => __( 'Writes a file inside the WordPress install. Reports what would change unless dry_run is false.', 'niranzwp' ),
+			'description'         => __( 'Writes a file inside the WordPress install, replacing it or appending to it. PHP that does not parse is refused before anything is written. Reports what would change unless dry_run is false.', 'niranzwp' ),
 			'category'            => 'niranzwp-filesystem',
 			'input_schema'        => [
 				'type'       => 'object',
 				'properties' => [
-					'path'    => [ 'type' => 'string' ],
-					'content' => [ 'type' => 'string' ],
-					'dry_run' => [ 'type' => 'boolean', 'default' => true ],
+					'path'               => [ 'type' => 'string' ],
+					'content'            => [ 'type' => 'string' ],
+					'mode'               => [
+						'type'        => 'string',
+						'enum'        => [ 'overwrite', 'append' ],
+						'description' => 'overwrite replaces the file, append adds to the end of it. Default overwrite.',
+						'default'     => 'overwrite',
+					],
+					'encoding'           => [
+						'type'        => 'string',
+						'enum'        => [ 'utf-8', 'base64' ],
+						'description' => 'base64 lets a binary file through, though create-upload-link is the better route for anything large.',
+						'default'     => 'utf-8',
+					],
+					'create_directories' => [
+						'type'        => 'boolean',
+						'description' => 'Create missing parent directories. Default false.',
+						'default'     => false,
+					],
+					'dry_run'            => [ 'type' => 'boolean', 'default' => true ],
 				],
 				'required'   => [ 'path', 'content' ],
 			],
@@ -126,15 +143,52 @@ final class Files {
 			'meta'                => $rw,
 		] );
 
-		register_ability( 'niranzwp/delete-file', [
-			'label'               => __( 'Delete file', 'niranzwp' ),
-			'description'         => __( 'Deletes a single file inside the WordPress install. Core directories and wp-config.php are refused. Previews unless dry_run is false.', 'niranzwp' ),
+		register_ability( 'niranzwp/edit-file', [
+			'label'               => __( 'Edit file', 'niranzwp' ),
+			'description'         => __( 'Replaces an exact string inside an existing file. The old string must appear exactly once unless replace_all is set, so an edit cannot land somewhere it was not meant to. PHP is parsed after the replacement and refused if it breaks. Previews unless dry_run is false.', 'niranzwp' ),
 			'category'            => 'niranzwp-filesystem',
 			'input_schema'        => [
 				'type'       => 'object',
 				'properties' => [
-					'path'    => [ 'type' => 'string' ],
-					'dry_run' => [ 'type' => 'boolean', 'default' => true ],
+					'path'        => [ 'type' => 'string' ],
+					'old_string'  => [
+						'type'        => 'string',
+						'description' => 'Exact text to find, whitespace included.',
+						'minLength'   => 1,
+					],
+					'new_string'  => [
+						'type'        => 'string',
+						'description' => 'What to put in its place. An empty string deletes the match.',
+					],
+					'replace_all' => [
+						'type'        => 'boolean',
+						'description' => 'Replace every occurrence. Without this, more than one match is an error rather than a guess.',
+						'default'     => false,
+					],
+					'dry_run'     => [ 'type' => 'boolean', 'default' => true ],
+				],
+				'required'   => [ 'path', 'old_string', 'new_string' ],
+			],
+			'output_schema'       => [ 'type' => 'object' ],
+			'permission_callback' => $gate,
+			'execute_callback'    => [ self::class, 'edit' ],
+			'meta'                => $rw,
+		] );
+
+		register_ability( 'niranzwp/delete-file', [
+			'label'               => __( 'Delete file', 'niranzwp' ),
+			'description'         => __( 'Deletes a file, or a whole directory when recursive is set. Core directories and wp-config.php are refused, and a tree containing a symlink is refused rather than followed. Previews unless dry_run is false.', 'niranzwp' ),
+			'category'            => 'niranzwp-filesystem',
+			'input_schema'        => [
+				'type'       => 'object',
+				'properties' => [
+					'path'      => [ 'type' => 'string' ],
+					'recursive' => [
+						'type'        => 'boolean',
+						'description' => 'Delete a directory and everything inside it. A recursive delete is not checkpointed and cannot be undone from here.',
+						'default'     => false,
+					],
+					'dry_run'   => [ 'type' => 'boolean', 'default' => true ],
 				],
 				'required'   => [ 'path' ],
 			],
@@ -403,7 +457,28 @@ final class Files {
 		$input = is_array( $input ) ? $input : [];
 		$dry     = ! isset( $input['dry_run'] ) || (bool) $input['dry_run'];
 		$content = (string) ( $input['content'] ?? '' );
-		$path    = self::resolve( (string) ( $input['path'] ?? '' ), false );
+		$mode    = 'append' === ( $input['mode'] ?? 'overwrite' ) ? 'append' : 'overwrite';
+
+		// Text is the normal case; base64 is here so a binary file has a way
+		// through this ability at all, though create-upload-link is the better
+		// route for anything large.
+		if ( 'base64' === ( $input['encoding'] ?? 'utf-8' ) ) {
+			$decoded = base64_decode( $content, true );
+			if ( false === $decoded ) {
+				return new \WP_Error( 'niranzwp_bad_base64', 'content is not valid base64.', [ 'status' => 400 ] );
+			}
+			$content = $decoded;
+		}
+
+		$prepared = Upload::prepare_path(
+			(string) ( $input['path'] ?? '' ),
+			! empty( $input['create_directories'] )
+		);
+		if ( is_wp_error( $prepared ) ) {
+			return $prepared;
+		}
+
+		$path = self::resolve( $prepared, false );
 		if ( is_wp_error( $path ) ) {
 			return $path;
 		}
@@ -411,22 +486,28 @@ final class Files {
 		$exists = file_exists( $path );
 		$before = $exists ? (string) file_get_contents( $path ) : '';
 
+		// Appending is a different intent from replacing, so what lands on
+		// disk is built here and everything downstream - the parse gate, the
+		// checkpoint, the guard - sees the file as it will actually be.
+		$final = 'append' === $mode ? $before . $content : $content;
+
 		$out = [
 			'path'         => self::rel( $path ),
 			'existed'      => $exists,
+			'mode'         => $mode,
 			'bytes_before' => strlen( $before ),
-			'bytes_after'  => strlen( $content ),
+			'bytes_after'  => strlen( $final ),
 			'dry_run'      => $dry,
 		];
 
-		if ( $before === $content ) {
+		if ( $before === $final ) {
 			$out['status'] = 'unchanged';
 			return $out;
 		}
 		// A PHP file that does not parse takes the whole site down the moment
 		// WordPress loads it, and a checkpoint cannot be restored through a
 		// site that will not boot. Catching it here costs nothing.
-		$parse_error = self::php_parse_error( self::rel( $path ), $content );
+		$parse_error = self::php_parse_error( self::rel( $path ), $final );
 		if ( null !== $parse_error ) {
 			return new \WP_Error(
 				'niranzwp_php_syntax',
@@ -450,7 +531,7 @@ final class Files {
 		// load -- a checkpoint is no use through a site that will not boot.
 		Recovery::arm( $path, $exists ? $before : null );
 
-		if ( false === file_put_contents( $path, $content ) ) {
+		if ( false === file_put_contents( $path, $final ) ) {
 			Recovery::disarm();
 			return new \WP_Error( 'niranzwp_write_failed', 'Could not write the file. Check filesystem permissions.' );
 		}
@@ -458,6 +539,114 @@ final class Files {
 		$out['status']    = 'written';
 		$out['guarded']   = Recovery::installed();
 		return $out;
+	}
+
+	/**
+	 * Replace an exact string inside a file.
+	 *
+	 * Whole-file writes carry whole-file risk: to change one line you resend
+	 * every line, and anything you got wrong about the rest goes with it. This
+	 * changes only what it was pointed at, and refuses to guess -- a string
+	 * that appears twice is an error rather than a coin toss about which one
+	 * was meant.
+	 *
+	 * @return array<string,mixed>|\WP_Error
+	 */
+	public static function edit( mixed $input = [] ) {
+		$input = is_array( $input ) ? $input : [];
+		$dry   = ! isset( $input['dry_run'] ) || (bool) $input['dry_run'];
+		$old   = (string) ( $input['old_string'] ?? '' );
+		$new   = (string) ( $input['new_string'] ?? '' );
+		$all   = ! empty( $input['replace_all'] );
+
+		if ( '' === $old ) {
+			return new \WP_Error( 'niranzwp_no_old_string', 'old_string is required and cannot be empty.', [ 'status' => 400 ] );
+		}
+
+		$path = self::resolve( (string) ( $input['path'] ?? '' ) );
+		if ( is_wp_error( $path ) ) {
+			return $path;
+		}
+		if ( is_dir( $path ) ) {
+			return new \WP_Error( 'niranzwp_is_dir', 'That path is a directory.', [ 'status' => 400 ] );
+		}
+
+		$size = (int) filesize( $path );
+		if ( $size > self::MAX_READ ) {
+			return new \WP_Error(
+				'niranzwp_too_large',
+				sprintf( 'File is %d bytes; editing is limited to %d. Rewrite it with write-file or upload it instead.', $size, self::MAX_READ ),
+				[ 'status' => 413 ]
+			);
+		}
+
+		$before = (string) file_get_contents( $path );
+		$count  = substr_count( $before, $old );
+
+		if ( 0 === $count ) {
+			return new \WP_Error( 'niranzwp_no_match', 'old_string does not appear in that file. Nothing was changed.', [ 'status' => 404 ] );
+		}
+		if ( $count > 1 && ! $all ) {
+			return new \WP_Error(
+				'niranzwp_ambiguous',
+				sprintf( 'old_string appears %d times. Include more surrounding text to make it unique, or pass replace_all. Nothing was changed.', $count ),
+				[ 'status' => 409 ]
+			);
+		}
+		if ( $old === $new ) {
+			return new \WP_Error( 'niranzwp_no_change', 'old_string and new_string are identical. Nothing to do.', [ 'status' => 400 ] );
+		}
+
+		$after       = $all ? str_replace( $old, $new, $before ) : self::replace_once( $before, $old, $new );
+		$replacements = $all ? $count : 1;
+		$rel         = self::rel( $path );
+
+		$out = [
+			'path'         => $rel,
+			'matches'      => $count,
+			'replacements' => $replacements,
+			'bytes_before' => strlen( $before ),
+			'bytes_after'  => strlen( $after ),
+			'dry_run'      => $dry,
+		];
+
+		$parse_error = self::php_parse_error( $rel, $after );
+		if ( null !== $parse_error ) {
+			return new \WP_Error(
+				'niranzwp_php_syntax',
+				sprintf( 'That edit leaves PHP that does not parse: %s. Nothing was changed.', $parse_error ),
+				[ 'status' => 400 ]
+			);
+		}
+
+		if ( $dry ) {
+			$out['status'] = 'would_edit';
+			$out['note']   = 'Nothing was changed. Pass dry_run false to apply.';
+			return $out;
+		}
+
+		$out['checkpoint_id'] = Checkpoint::before_file( ltrim( $rel, '/' ), 'edit-file' );
+
+		Recovery::arm( $path, $before );
+
+		if ( false === file_put_contents( $path, $after ) ) {
+			Recovery::disarm();
+			return new \WP_Error( 'niranzwp_write_failed', 'Could not write the file. Check filesystem permissions.' );
+		}
+
+		if ( function_exists( 'opcache_invalidate' ) ) {
+			@opcache_invalidate( $path, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+		}
+
+		$out['status']  = 'edited';
+		$out['guarded'] = Recovery::installed();
+		return $out;
+	}
+
+	/** str_replace with no limit argument, so the first match is done by hand. */
+	private static function replace_once( string $haystack, string $needle, string $replacement ): string {
+		$at = strpos( $haystack, $needle );
+		return false === $at ? $haystack : substr_replace( $haystack, $replacement, $at, strlen( $needle ) );
 	}
 
 	/** @return array<string,mixed>|\WP_Error */
@@ -477,8 +666,61 @@ final class Files {
 				return new \WP_Error( 'niranzwp_protected', $dir . ' is a WordPress core directory and cannot be touched.' );
 			}
 		}
+		$recursive = ! empty( $input['recursive'] );
+
+		if ( is_dir( $path ) && ! $recursive ) {
+			return new \WP_Error(
+				'niranzwp_is_dir',
+				'That is a directory. Pass recursive true to delete it and everything inside.',
+				[ 'status' => 400 ]
+			);
+		}
+
 		if ( is_dir( $path ) ) {
-			return new \WP_Error( 'niranzwp_is_dir', 'Refusing to delete a directory. Delete files individually.' );
+			$victims = self::walk_for_delete( $path );
+			if ( is_wp_error( $victims ) ) {
+				return $victims;
+			}
+
+			$bytes = 0;
+			foreach ( $victims['files'] as $f ) {
+				$bytes += (int) filesize( $f );
+			}
+
+			if ( $dry ) {
+				return [
+					'path'        => '/' . $rel,
+					'files'       => count( $victims['files'] ),
+					'directories' => count( $victims['dirs'] ),
+					'bytes'       => $bytes,
+					'status'      => 'would_delete',
+					'dry_run'     => true,
+					'note'        => 'Nothing was deleted. Pass dry_run false to apply.',
+				];
+			}
+
+			// A whole tree is more than a checkpoint should be asked to hold,
+			// and quietly snapshotting hundreds of files would be its own
+			// surprise. Say so rather than implying an undo that is not there.
+			foreach ( $victims['files'] as $f ) {
+				if ( ! unlink( $f ) ) {
+					return new \WP_Error( 'niranzwp_delete_failed', 'Could not delete ' . self::rel( $f ) . '. Some files may already be gone.' );
+				}
+			}
+			foreach ( $victims['dirs'] as $d ) {
+				@rmdir( $d ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+			}
+
+			return [
+				'path'        => '/' . $rel,
+				'files'       => count( $victims['files'] ),
+				'directories' => count( $victims['dirs'] ),
+				'bytes'       => $bytes,
+				'status'      => 'deleted',
+				'dry_run'     => false,
+				'checkpoint_id' => null,
+				'note'        => 'A recursive delete is not checkpointed. Restore from a host backup if it was wrong.',
+			];
 		}
 
 		if ( $dry ) {
@@ -497,5 +739,59 @@ final class Files {
 		}
 
 		return [ 'path' => '/' . $rel, 'status' => 'deleted', 'dry_run' => false, 'checkpoint_id' => $checkpoint ];
+	}
+
+	/**
+	 * Collect what a recursive delete would remove, deepest first.
+	 *
+	 * Symlinks are refused outright rather than followed or skipped: following
+	 * one would delete outside the install, and skipping it silently would
+	 * leave the directory undeletable with no explanation.
+	 *
+	 * @return array{files: string[], dirs: string[]}|\WP_Error
+	 */
+	private static function walk_for_delete( string $dir ) {
+		$files = [];
+		$dirs  = [];
+		$stack = [ $dir ];
+
+		while ( $stack ) {
+			$current = array_pop( $stack );
+			$dirs[]  = $current;
+
+			foreach ( (array) scandir( $current ) as $name ) {
+				if ( '.' === $name || '..' === $name ) {
+					continue;
+				}
+				$full = $current . '/' . $name;
+
+				if ( is_link( $full ) ) {
+					return new \WP_Error(
+						'niranzwp_symlink',
+						'Refusing to delete a tree containing a symlink: ' . self::rel( $full ),
+						[ 'status' => 400 ]
+					);
+				}
+
+				if ( is_dir( $full ) ) {
+					$stack[] = $full;
+					continue;
+				}
+				$files[] = $full;
+
+				if ( count( $files ) > self::MAX_ENTRIES ) {
+					return new \WP_Error(
+						'niranzwp_too_many',
+						sprintf( 'That tree holds more than %d files. Delete it from the host instead.', self::MAX_ENTRIES ),
+						[ 'status' => 400 ]
+					);
+				}
+			}
+		}
+
+		// Deepest first, so rmdir finds each one empty.
+		usort( $dirs, static fn( $a, $b ) => substr_count( $b, '/' ) <=> substr_count( $a, '/' ) );
+
+		return [ 'files' => $files, 'dirs' => $dirs ];
 	}
 }

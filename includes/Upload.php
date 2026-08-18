@@ -121,7 +121,7 @@ final class Upload {
 		// directory that is not there yet. So containment is established
 		// first, against the deepest ancestor that does exist, and only then
 		// is the tree created.
-		$prepared = self::prepare_destination(
+		$prepared = self::prepare_path(
 			(string) ( $input['path'] ?? '' ),
 			! empty( $input['create_directories'] )
 		);
@@ -198,9 +198,12 @@ final class Upload {
 	 * is the only part realpath can speak for; the missing tail is created
 	 * beneath a directory already proven to be inside the root.
 	 *
+	 * Public because write-file needs the same treatment for its own
+	 * create_directories: resolution is realpath-based either way.
+	 *
 	 * @return string|\WP_Error The relative path, ready for Files::resolve_path.
 	 */
-	private static function prepare_destination( string $path, bool $create ) {
+	public static function prepare_path( string $path, bool $create ) {
 		$path = ltrim( str_replace( '\\', '/', trim( $path ) ), '/' );
 
 		if ( '' === $path ) {
