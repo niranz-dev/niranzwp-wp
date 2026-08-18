@@ -22,7 +22,9 @@ final class Files {
 
 	private const PROTECTED_DIRS  = [ 'wp-admin', 'wp-includes' ];
 	private const PROTECTED_FILES = [ 'wp-config.php' ];
-	private const MAX_READ        = 2097152; // 2 MB
+	private const MAX_READ        = 2097152; // 2 MB, per call rather than per file
+	private const MAX_ENTRIES     = 5000;
+	private const MAX_DEPTH       = 20;
 
 	public static function enabled(): bool {
 		$s = get_option( OPTION_KEY, [] );
@@ -38,13 +40,25 @@ final class Files {
 		$ro   = [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => true, 'destructive' => false ] ];
 		$rw   = [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => false, 'destructive' => true ] ];
 
-		wp_register_ability( 'niranzwp/read-file', [
+		register_ability( 'niranzwp/read-file', [
 			'label'               => __( 'Read file', 'niranzwp' ),
-			'description'         => __( 'Reads a file inside the WordPress install. wp-config.php is refused because it holds database credentials and salts.', 'niranzwp' ),
+			'description'         => __( 'Reads a file inside the WordPress install, whole or in slices. A file larger than the 2 MB per-call limit is read with offset and limit rather than refused. wp-config.php is refused because it holds database credentials and salts.', 'niranzwp' ),
 			'category'            => 'niranzwp-filesystem',
 			'input_schema'        => [
 				'type'       => 'object',
-				'properties' => [ 'path' => [ 'type' => 'string' ] ],
+				'properties' => [
+					'path'   => [ 'type' => 'string' ],
+					'offset' => [
+						'type'        => 'integer',
+						'description' => 'Byte to start at. Default 0.',
+						'minimum'     => 0,
+					],
+					'limit'  => [
+						'type'        => 'integer',
+						'description' => 'How many bytes to return. Defaults to the rest of the file, capped at 2 MB per call. The response carries next_offset until eof.',
+						'minimum'     => 0,
+					],
+				],
 				'required'   => [ 'path' ],
 			],
 			'output_schema'       => [ 'type' => 'object' ],
@@ -53,13 +67,39 @@ final class Files {
 			'meta'                => $ro,
 		] );
 
-		wp_register_ability( 'niranzwp/list-directory', [
+		register_ability( 'niranzwp/list-directory', [
 			'label'               => __( 'List directory', 'niranzwp' ),
-			'description'         => __( 'Lists files and directories inside the WordPress install.', 'niranzwp' ),
+			'description'         => __( 'Lists files and directories inside the WordPress install, optionally walking subdirectories and filtering by name. Symlinks are skipped, so a recursive walk cannot report anything outside the install.', 'niranzwp' ),
 			'category'            => 'niranzwp-filesystem',
 			'input_schema'        => [
 				'type'       => 'object',
-				'properties' => [ 'path' => [ 'type' => 'string', 'default' => '' ] ],
+				'properties' => [
+					'path'           => [ 'type' => 'string', 'default' => '' ],
+					'recursive'      => [
+						'type'        => 'boolean',
+						'description' => 'Walk subdirectories. Names are returned relative to the starting path.',
+						'default'     => false,
+					],
+					'pattern'        => [
+						'type'        => 'string',
+						'description' => 'Shell glob matched against each entry name, e.g. "*.php". Directories are still descended into when recursive.',
+					],
+					'max_depth'      => [
+						'type'        => 'integer',
+						'description' => 'How deep to walk. Default and maximum 20.',
+						'minimum'     => 1,
+					],
+					'limit'          => [
+						'type'        => 'integer',
+						'description' => 'Most entries to return. Default and maximum 5000. The response says truncated when it stops early.',
+						'minimum'     => 1,
+					],
+					'include_hidden' => [
+						'type'        => 'boolean',
+						'description' => 'Include dotfiles. Default false.',
+						'default'     => false,
+					],
+				],
 			],
 			'output_schema'       => [ 'type' => 'object' ],
 			'permission_callback' => $gate,
@@ -67,7 +107,7 @@ final class Files {
 			'meta'                => $ro,
 		] );
 
-		wp_register_ability( 'niranzwp/write-file', [
+		register_ability( 'niranzwp/write-file', [
 			'label'               => __( 'Write file', 'niranzwp' ),
 			'description'         => __( 'Writes a file inside the WordPress install. Reports what would change unless dry_run is false.', 'niranzwp' ),
 			'category'            => 'niranzwp-filesystem',
@@ -86,7 +126,7 @@ final class Files {
 			'meta'                => $rw,
 		] );
 
-		wp_register_ability( 'niranzwp/delete-file', [
+		register_ability( 'niranzwp/delete-file', [
 			'label'               => __( 'Delete file', 'niranzwp' ),
 			'description'         => __( 'Deletes a single file inside the WordPress install. Core directories and wp-config.php are refused. Previews unless dry_run is false.', 'niranzwp' ),
 			'category'            => 'niranzwp-filesystem',
@@ -206,15 +246,59 @@ final class Files {
 		}
 
 		$size = (int) filesize( $path );
-		if ( $size > self::MAX_READ ) {
-			return new \WP_Error( 'niranzwp_too_large', sprintf( 'File is %d bytes; the limit is %d.', $size, self::MAX_READ ) );
+
+		/*
+		 * A cap on one response is reasonable; a cap on the file was not. A
+		 * 3 MB debug log used to be unreadable outright, which is precisely
+		 * when reading it matters. offset and limit turn the same file into a
+		 * series of readable slices, and the cap now applies per call.
+		 */
+		$offset = max( 0, (int) ( $input['offset'] ?? 0 ) );
+		$limit  = isset( $input['limit'] ) ? (int) $input['limit'] : null;
+
+		if ( $offset > $size ) {
+			return new \WP_Error(
+				'niranzwp_bad_offset',
+				sprintf( 'Offset %d is past the end of the file (%d bytes).', $offset, $size ),
+				[ 'status' => 400 ]
+			);
 		}
 
+		$remaining = $size - $offset;
+		$wanted    = null === $limit ? $remaining : max( 0, $limit );
+		$wanted    = min( $wanted, $remaining );
+
+		if ( $wanted > self::MAX_READ ) {
+			if ( null !== $limit ) {
+				return new \WP_Error(
+					'niranzwp_too_large',
+					sprintf( 'limit is %d bytes; the most one call may return is %d.', $limit, self::MAX_READ ),
+					[ 'status' => 400 ]
+				);
+			}
+			return new \WP_Error(
+				'niranzwp_too_large',
+				sprintf(
+					'File is %d bytes and the most one call may return is %d. Read it in slices with offset and limit.',
+					$size,
+					self::MAX_READ
+				),
+				[ 'status' => 413 ]
+			);
+		}
+
+		$content = 0 === $wanted ? '' : (string) file_get_contents( $path, false, null, $offset, $wanted );
+		$next    = $offset + strlen( $content );
+
 		return [
-			'path'     => self::rel( $path ),
-			'bytes'    => $size,
-			'modified' => gmdate( 'c', (int) filemtime( $path ) ),
-			'content'  => (string) file_get_contents( $path ),
+			'path'           => self::rel( $path ),
+			'bytes'          => $size,
+			'offset'         => $offset,
+			'bytes_returned' => strlen( $content ),
+			'next_offset'    => $next < $size ? $next : null,
+			'eof'            => $next >= $size,
+			'modified'       => gmdate( 'c', (int) filemtime( $path ) ),
+			'content'        => $content,
 		];
 	}
 
@@ -232,22 +316,84 @@ final class Files {
 			return new \WP_Error( 'niranzwp_not_dir', 'That path is not a directory.' );
 		}
 
-		$entries = [];
-		foreach ( (array) scandir( $path ) as $name ) {
-			if ( '.' === $name || '..' === $name ) {
-				continue;
+		$recursive = ! empty( $input['recursive'] );
+		$hidden    = ! empty( $input['include_hidden'] );
+		$pattern   = trim( (string) ( $input['pattern'] ?? '' ) );
+		$max_depth = isset( $input['max_depth'] ) ? max( 1, (int) $input['max_depth'] ) : self::MAX_DEPTH;
+		$limit     = isset( $input['limit'] ) ? max( 1, (int) $input['limit'] ) : self::MAX_ENTRIES;
+		$limit     = min( $limit, self::MAX_ENTRIES );
+
+		$entries  = [];
+		$stack    = [ [ $path, 0 ] ];
+		$examined = 0;
+		$truncated = false;
+
+		while ( $stack ) {
+			[ $dir, $depth ] = array_shift( $stack );
+
+			foreach ( (array) scandir( $dir ) as $name ) {
+				if ( '.' === $name || '..' === $name ) {
+					continue;
+				}
+				if ( ! $hidden && str_starts_with( $name, '.' ) ) {
+					continue;
+				}
+
+				$full   = $dir . '/' . $name;
+				$is_dir = is_dir( $full );
+
+				// A symlink pointing out of the install would otherwise let a
+				// recursive walk report files that no other ability here can
+				// touch.
+				if ( is_link( $full ) ) {
+					continue;
+				}
+
+				++$examined;
+
+				// A directory still has to be descended into even when the
+				// pattern excludes it from the listing.
+				if ( $is_dir && $recursive && $depth + 1 < $max_depth ) {
+					$stack[] = [ $full, $depth + 1 ];
+				}
+
+				if ( '' !== $pattern && ! fnmatch( $pattern, $name ) ) {
+					continue;
+				}
+
+				if ( count( $entries ) >= $limit ) {
+					$truncated = true;
+					continue;
+				}
+
+				$entries[] = [
+					'name'     => $recursive ? ltrim( str_replace( $path, '', $full ), '/' ) : $name,
+					'type'     => $is_dir ? 'directory' : 'file',
+					'size'     => $is_dir ? 0 : (int) filesize( $full ),
+					'modified' => gmdate( 'c', (int) filemtime( $full ) ),
+				];
 			}
-			$full      = $path . '/' . $name;
-			$is_dir    = is_dir( $full );
-			$entries[] = [
-				'name'     => $name,
-				'type'     => $is_dir ? 'directory' : 'file',
-				'size'     => $is_dir ? 0 : (int) filesize( $full ),
-				'modified' => gmdate( 'c', (int) filemtime( $full ) ),
-			];
 		}
 
-		return [ 'path' => self::rel( $path ), 'total' => count( $entries ), 'entries' => $entries ];
+		$out = [
+			'path'      => self::rel( $path ),
+			'total'     => count( $entries ),
+			'recursive' => $recursive,
+			'entries'   => $entries,
+		];
+
+		if ( '' !== $pattern ) {
+			$out['pattern']  = $pattern;
+			$out['examined'] = $examined;
+		}
+
+		// Say so rather than letting a capped list read as a complete one.
+		if ( $truncated ) {
+			$out['truncated'] = true;
+			$out['note']      = sprintf( 'Stopped at %d entries. Narrow with pattern, or raise limit.', $limit );
+		}
+
+		return $out;
 	}
 
 	/** @return array<string,mixed>|\WP_Error */

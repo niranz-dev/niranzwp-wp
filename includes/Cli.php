@@ -30,7 +30,7 @@ final class Cli {
 	}
 
 	public static function register(): void {
-		wp_register_ability(
+		register_ability(
 			'niranzwp/run-wp-cli',
 			[
 				'label'               => __( 'Run WP-CLI', 'niranzwp' ),
@@ -57,7 +57,7 @@ final class Cli {
 			]
 		);
 
-		wp_register_ability(
+		register_ability(
 			'niranzwp/wp-cli-status',
 			[
 				'label'               => __( 'WP-CLI status', 'niranzwp' ),

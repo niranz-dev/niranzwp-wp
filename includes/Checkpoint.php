@@ -410,7 +410,7 @@ final class Checkpoint {
 		$rw = [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => false, 'destructive' => false ] ];
 		$rm = [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => false, 'destructive' => true, 'idempotent' => true ] ];
 
-		wp_register_ability( 'niranzwp/checkpoint-create', [
+		register_ability( 'niranzwp/checkpoint-create', [
 			'label'               => __( 'Create checkpoint', 'niranzwp' ),
 			'description'         => __( 'Snapshots the current state of the given files, posts and options so a later change can be rolled back. Not a substitute for a host backup.', 'niranzwp' ),
 			'category'            => 'niranzwp-checkpoints',
@@ -429,7 +429,7 @@ final class Checkpoint {
 			'meta'                => $rw,
 		] );
 
-		wp_register_ability( 'niranzwp/checkpoint-list', [
+		register_ability( 'niranzwp/checkpoint-list', [
 			'label'               => __( 'List checkpoints', 'niranzwp' ),
 			'description'         => __( 'Lists saved checkpoints, newest first.', 'niranzwp' ),
 			'category'            => 'niranzwp-checkpoints',
@@ -443,7 +443,7 @@ final class Checkpoint {
 			'meta'                => $ro,
 		] );
 
-		wp_register_ability( 'niranzwp/checkpoint-restore', [
+		register_ability( 'niranzwp/checkpoint-restore', [
 			'label'               => __( 'Restore checkpoint', 'niranzwp' ),
 			'description'         => __( 'Puts the files, posts and options in a checkpoint back the way they were. Reports what would change unless dry_run is false.', 'niranzwp' ),
 			'category'            => 'niranzwp-checkpoints',
@@ -461,7 +461,7 @@ final class Checkpoint {
 			'meta'                => $rw,
 		] );
 
-		wp_register_ability( 'niranzwp/checkpoint-delete', [
+		register_ability( 'niranzwp/checkpoint-delete', [
 			'label'               => __( 'Delete checkpoint', 'niranzwp' ),
 			'description'         => __( 'Permanently removes a saved checkpoint.', 'niranzwp' ),
 			'category'            => 'niranzwp-checkpoints',

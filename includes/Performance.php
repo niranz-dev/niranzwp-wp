@@ -370,7 +370,7 @@ final class Performance {
 	public static function register( callable|array $gate ): void {
 		$ro = [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => true, 'destructive' => false ] ];
 
-		wp_register_ability( 'niranzwp/db-report', [
+		register_ability( 'niranzwp/db-report', [
 			'label'               => __( 'Database report', 'niranzwp' ),
 			'description'         => __( 'What the database is carrying that nothing reads: revisions, auto-drafts, trash, spam, expired transients and orphaned meta. Also the largest tables and the autoloaded option weight.', 'niranzwp' ),
 			'category'            => 'niranzwp-performance',
@@ -381,7 +381,7 @@ final class Performance {
 			'meta'                => $ro,
 		] );
 
-		wp_register_ability( 'niranzwp/db-cleanup', [
+		register_ability( 'niranzwp/db-cleanup', [
 			'label'               => __( 'Database cleanup', 'niranzwp' ),
 			'description'         => __( 'Removes what db-report found. Previews unless dry_run is false. A checkpoint cannot cover this — snapshotting the rows would cost more than removing them — so read the preview first.', 'niranzwp' ),
 			'category'            => 'niranzwp-performance',
@@ -402,7 +402,7 @@ final class Performance {
 			'meta'                => [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => false, 'destructive' => true ] ],
 		] );
 
-		wp_register_ability( 'niranzwp/asset-audit', [
+		register_ability( 'niranzwp/asset-audit', [
 			'label'               => __( 'Asset audit', 'niranzwp' ),
 			'description'         => __( 'Fetches a page as a visitor would and reports what it loads: scripts, stylesheets, which of them block first paint, and which plugin or theme each came from.', 'niranzwp' ),
 			'category'            => 'niranzwp-performance',
@@ -416,7 +416,7 @@ final class Performance {
 			'meta'                => $ro,
 		] );
 
-		wp_register_ability( 'niranzwp/image-weight', [
+		register_ability( 'niranzwp/image-weight', [
 			'label'               => __( 'Image weight', 'niranzwp' ),
 			'description'         => __( 'The heaviest images in the library, their dimensions, and how many are wider than any screen will use.', 'niranzwp' ),
 			'category'            => 'niranzwp-performance',

@@ -37,7 +37,7 @@ final class Seo {
 	];
 
 	public static function register( callable|array $gate ): void {
-		wp_register_ability(
+		register_ability(
 			'niranzwp/seo-audit',
 			[
 				'label'               => __( 'SEO audit', 'niranzwp' ),
@@ -56,7 +56,7 @@ final class Seo {
 			]
 		);
 
-		wp_register_ability(
+		register_ability(
 			'niranzwp/geo-check',
 			[
 				'label'               => __( 'GEO check', 'niranzwp' ),

@@ -21,7 +21,7 @@ final class SeoFix {
 	private const MAX_BATCH = 200;
 
 	public static function register( callable|array $gate ): void {
-		wp_register_ability(
+		register_ability(
 			'niranzwp/seo-list-missing',
 			[
 				'label'               => __( 'List posts missing SEO data', 'niranzwp' ),
@@ -43,7 +43,7 @@ final class SeoFix {
 			]
 		);
 
-		wp_register_ability(
+		register_ability(
 			'niranzwp/seo-set-meta',
 			[
 				'label'               => __( 'Set SEO meta', 'niranzwp' ),
@@ -74,7 +74,7 @@ final class SeoFix {
 			]
 		);
 
-		wp_register_ability(
+		register_ability(
 			'niranzwp/media-set-alt',
 			[
 				'label'               => __( 'Set image alt text', 'niranzwp' ),
@@ -104,7 +104,7 @@ final class SeoFix {
 			]
 		);
 
-		wp_register_ability(
+		register_ability(
 			'niranzwp/geo-llms-txt',
 			[
 				'label'               => __( 'Generate llms.txt', 'niranzwp' ),

@@ -77,7 +77,7 @@ final class Abilities {
 		Runtime::register();
 		Cli::register();
 
-		wp_register_ability(
+		register_ability(
 			'niranzwp/site-info',
 			[
 				'label'               => __( 'Site information', 'niranzwp' ),
@@ -91,7 +91,7 @@ final class Abilities {
 			]
 		);
 
-		wp_register_ability(
+		register_ability(
 			'niranzwp/list-plugins',
 			[
 				'label'               => __( 'List plugins', 'niranzwp' ),
@@ -110,7 +110,7 @@ final class Abilities {
 			]
 		);
 
-		wp_register_ability(
+		register_ability(
 			'niranzwp/autoload-report',
 			[
 				'label'               => __( 'Autoload report', 'niranzwp' ),
@@ -129,7 +129,7 @@ final class Abilities {
 			]
 		);
 
-		wp_register_ability(
+		register_ability(
 			'niranzwp/purge-cache',
 			[
 				'label'               => __( 'Purge caches', 'niranzwp' ),

@@ -49,7 +49,7 @@ final class Runtime {
 	}
 
 	public static function register(): void {
-		wp_register_ability(
+		register_ability(
 			'niranzwp/evaluate',
 			[
 				'label'               => __( 'Evaluate PHP', 'niranzwp' ),

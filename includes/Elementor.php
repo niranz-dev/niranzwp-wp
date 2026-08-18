@@ -33,7 +33,7 @@ final class Elementor {
 	public static function register( callable|array $gate ): void {
 		$ro = [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => true, 'destructive' => false ] ];
 
-		wp_register_ability( 'niranzwp/elementor-status', [
+		register_ability( 'niranzwp/elementor-status', [
 			'label'               => __( 'Elementor status', 'niranzwp' ),
 			'description'         => __( 'Reports whether Elementor is active, its version, how many pages use it, and which widget types this site actually uses.', 'niranzwp' ),
 			'category'            => 'niranzwp-elementor',
@@ -47,7 +47,7 @@ final class Elementor {
 			'meta'                => $ro,
 		] );
 
-		wp_register_ability( 'niranzwp/elementor-read', [
+		register_ability( 'niranzwp/elementor-read', [
 			'label'               => __( 'Read Elementor layout', 'niranzwp' ),
 			'description'         => __( 'Returns a page\'s Elementor layout as a readable tree of elements, widget types and their ids, without the full settings payload.', 'niranzwp' ),
 			'category'            => 'niranzwp-elementor',
@@ -66,7 +66,7 @@ final class Elementor {
 			'meta'                => $ro,
 		] );
 
-		wp_register_ability( 'niranzwp/elementor-find', [
+		register_ability( 'niranzwp/elementor-find', [
 			'label'               => __( 'Find Elementor elements', 'niranzwp' ),
 			'description'         => __( 'Finds elements on a page by widget type or by matching text in their settings, returning each element id so it can be edited precisely.', 'niranzwp' ),
 			'category'            => 'niranzwp-elementor',
@@ -85,7 +85,7 @@ final class Elementor {
 			'meta'                => $ro,
 		] );
 
-		wp_register_ability( 'niranzwp/elementor-update-setting', [
+		register_ability( 'niranzwp/elementor-update-setting', [
 			'label'               => __( 'Update an Elementor setting', 'niranzwp' ),
 			'description'         => __( 'Changes one setting on one element of an Elementor page, found by element id. Previews the before and after unless dry_run is false, and clears Elementor\'s CSS cache after writing.', 'niranzwp' ),
 			'category'            => 'niranzwp-elementor',

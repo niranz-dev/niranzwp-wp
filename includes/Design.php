@@ -312,7 +312,7 @@ final class Design {
 		$ro = [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => true, 'destructive' => false ] ];
 		$rw = [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => false, 'destructive' => false ] ];
 
-		wp_register_ability( 'niranzwp/design-read', [
+		register_ability( 'niranzwp/design-read', [
 			'label'               => __( 'Read design', 'niranzwp' ),
 			'description'         => __( 'The palette, typefaces and rules this site works to. Read this before building or restyling anything visual.', 'niranzwp' ),
 			'category'            => 'niranzwp-design',
@@ -323,7 +323,7 @@ final class Design {
 			'meta'                => $ro,
 		] );
 
-		wp_register_ability( 'niranzwp/design-check', [
+		register_ability( 'niranzwp/design-check', [
 			'label'               => __( 'Check design', 'niranzwp' ),
 			'description'         => __( 'Checks HTML or CSS you have built against this site\'s palette and rules, and against the shapes generated design keeps landing on. Call it before shipping any visual work and fix every fail.', 'niranzwp' ),
 			'category'            => 'niranzwp-design',
@@ -340,7 +340,7 @@ final class Design {
 			'meta'                => $ro,
 		] );
 
-		wp_register_ability( 'niranzwp/design-write', [
+		register_ability( 'niranzwp/design-write', [
 			'label'               => __( 'Write design', 'niranzwp' ),
 			'description'         => __( 'Sets the name, notes and rules for this site\'s design. Palette and typefaces are only writable on a theme with no theme.json; otherwise they belong to the theme.', 'niranzwp' ),
 			'category'            => 'niranzwp-design',

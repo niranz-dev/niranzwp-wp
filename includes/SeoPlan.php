@@ -328,7 +328,7 @@ final class SeoPlan {
 	public static function register( callable|array $gate ): void {
 		$ro = [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => true, 'destructive' => false ] ];
 
-		wp_register_ability( 'niranzwp/seo-priorities', [
+		register_ability( 'niranzwp/seo-priorities', [
 			'label'               => __( 'SEO priorities', 'niranzwp' ),
 			'description'         => __( 'Joins every audit into one list in the order worth working through, with the reason and the effort for each. Start here rather than with an individual audit.', 'niranzwp' ),
 			'category'            => 'niranzwp-seo',
@@ -342,7 +342,7 @@ final class SeoPlan {
 			'meta'                => $ro,
 		] );
 
-		wp_register_ability( 'niranzwp/internal-link-suggest', [
+		register_ability( 'niranzwp/internal-link-suggest', [
 			'label'               => __( 'Suggest internal links', 'niranzwp' ),
 			'description'         => __( 'For posts that link nowhere internally, finds related posts whose title already appears as a phrase in the text, so the link has somewhere natural to go. Suggests only; edits nothing.', 'niranzwp' ),
 			'category'            => 'niranzwp-seo',
@@ -360,7 +360,7 @@ final class SeoPlan {
 			'meta'                => $ro,
 		] );
 
-		wp_register_ability( 'niranzwp/content-refresh', [
+		register_ability( 'niranzwp/content-refresh', [
 			'label'               => __( 'Content worth refreshing', 'niranzwp' ),
 			'description'         => __( 'Old, substantial posts that were never revised, ordered by how many other posts link to them. Updating one of these is usually cheaper than writing something new.', 'niranzwp' ),
 			'category'            => 'niranzwp-seo',

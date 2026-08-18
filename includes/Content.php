@@ -32,7 +32,7 @@ final class Content {
 	}
 
 	public static function register( callable|array $gate ): void {
-		wp_register_ability(
+		register_ability(
 			'niranzwp/content-audit',
 			[
 				'label'               => __( 'Content audit', 'niranzwp' ),
@@ -52,7 +52,7 @@ final class Content {
 			]
 		);
 
-		wp_register_ability(
+		register_ability(
 			'niranzwp/content-list',
 			[
 				'label'               => __( 'List content problems', 'niranzwp' ),
@@ -75,7 +75,7 @@ final class Content {
 			]
 		);
 
-		wp_register_ability(
+		register_ability(
 			'niranzwp/schema-audit',
 			[
 				'label'               => __( 'Schema audit', 'niranzwp' ),

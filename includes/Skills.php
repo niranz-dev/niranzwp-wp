@@ -304,7 +304,7 @@ final class Skills {
 		$rw = [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => false, 'destructive' => false ] ];
 		$rm = [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => false, 'destructive' => true, 'idempotent' => true ] ];
 
-		wp_register_ability( 'niranzwp/skill-list', [
+		register_ability( 'niranzwp/skill-list', [
 			'label'               => __( 'List skills', 'niranzwp' ),
 			'description'         => __( 'Lists the written instructions this site keeps for anything working on it. Read these before editing content, writing alt text or changing SEO fields, and follow them.', 'niranzwp' ),
 			'category'            => 'niranzwp-skills',
@@ -320,7 +320,7 @@ final class Skills {
 			'meta'                => $ro,
 		] );
 
-		wp_register_ability( 'niranzwp/skill-get', [
+		register_ability( 'niranzwp/skill-get', [
 			'label'               => __( 'Get skill', 'niranzwp' ),
 			'description'         => __( 'Returns the full text of one skill by slug.', 'niranzwp' ),
 			'category'            => 'niranzwp-skills',
@@ -335,7 +335,7 @@ final class Skills {
 			'meta'                => $ro,
 		] );
 
-		wp_register_ability( 'niranzwp/skill-write', [
+		register_ability( 'niranzwp/skill-write', [
 			'label'               => __( 'Write skill', 'niranzwp' ),
 			'description'         => __( 'Creates or replaces a skill. Snapshots the previous version first.', 'niranzwp' ),
 			'category'            => 'niranzwp-skills',
@@ -355,7 +355,7 @@ final class Skills {
 			'meta'                => $rw,
 		] );
 
-		wp_register_ability( 'niranzwp/skill-delete', [
+		register_ability( 'niranzwp/skill-delete', [
 			'label'               => __( 'Delete skill', 'niranzwp' ),
 			'description'         => __( 'Permanently removes a skill. Snapshots it first.', 'niranzwp' ),
 			'category'            => 'niranzwp-skills',

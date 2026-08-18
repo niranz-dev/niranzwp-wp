@@ -25,7 +25,7 @@ final class Blocks {
 	public static function register( callable|array $gate ): void {
 		$ro = [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => true, 'destructive' => false ] ];
 
-		wp_register_ability( 'niranzwp/block-types', [
+		register_ability( 'niranzwp/block-types', [
 			'label'               => __( 'List block types', 'niranzwp' ),
 			'description'         => __( 'Lists the block types registered on this site, so content is composed only from blocks that actually exist here.', 'niranzwp' ),
 			'category'            => 'niranzwp-gutenberg',
@@ -42,7 +42,7 @@ final class Blocks {
 			'meta'                => $ro,
 		] );
 
-		wp_register_ability( 'niranzwp/block-type', [
+		register_ability( 'niranzwp/block-type', [
 			'label'               => __( 'Describe a block type', 'niranzwp' ),
 			'description'         => __( 'Returns one block type\'s attribute schema, supports, parent and ancestor constraints, so its attributes can be set correctly the first time.', 'niranzwp' ),
 			'category'            => 'niranzwp-gutenberg',
@@ -57,7 +57,7 @@ final class Blocks {
 			'meta'                => $ro,
 		] );
 
-		wp_register_ability( 'niranzwp/block-read', [
+		register_ability( 'niranzwp/block-read', [
 			'label'               => __( 'Read post blocks', 'niranzwp' ),
 			'description'         => __( 'Returns a post\'s content as a parsed block tree with names and attributes, rather than raw markup.', 'niranzwp' ),
 			'category'            => 'niranzwp-gutenberg',
@@ -75,7 +75,7 @@ final class Blocks {
 			'meta'                => $ro,
 		] );
 
-		wp_register_ability( 'niranzwp/block-write', [
+		register_ability( 'niranzwp/block-write', [
 			'label'               => __( 'Write post blocks', 'niranzwp' ),
 			'description'         => __( 'Replaces or appends a post\'s content from a block tree. Validates every block name and attribute against this site\'s registry first, and previews unless dry_run is false.', 'niranzwp' ),
 			'category'            => 'niranzwp-gutenberg',

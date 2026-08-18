@@ -324,7 +324,7 @@ final class Context {
 
 	/** @param callable|array $gate */
 	public static function register( callable|array $gate ): void {
-		wp_register_ability( 'niranzwp/context', [
+		register_ability( 'niranzwp/context', [
 			'label'               => __( 'Site context', 'niranzwp' ),
 			'description'         => __( 'The standing brief for this site: what is installed, which plugins own which fields, what is switched on, the rules the owner set, and the skills available. Call this first, before doing anything else on this site.', 'niranzwp' ),
 			'category'            => 'niranzwp-skills',

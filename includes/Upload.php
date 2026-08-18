@@ -52,7 +52,7 @@ final class Upload {
 	}
 
 	public static function register(): void {
-		wp_register_ability(
+		register_ability(
 			'niranzwp/create-upload-link',
 			[
 				'label'               => __( 'Create upload link', 'niranzwp' ),
