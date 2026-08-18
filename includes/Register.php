@@ -50,6 +50,19 @@ function register_ability( string $name, array $args ): void {
 function close_schema( array $schema ): array {
 	$is_object = ( $schema['type'] ?? null ) === 'object' || isset( $schema['properties'] );
 
+	/*
+	 * An empty property map is often written as (object) [] so that it encodes
+	 * as {} rather than []. That is right for the JSON, and fatal here: core's
+	 * validator reaches $args['properties'][ $key ] once additionalProperties
+	 * is set, and a stdClass cannot be read as an array. Six abilities were
+	 * written that way and each one took the site down on its first unknown
+	 * key. Normalise to an array; an empty object schema with no properties
+	 * refuses everything either way, which is the intent.
+	 */
+	if ( isset( $schema['properties'] ) && is_object( $schema['properties'] ) ) {
+		$schema['properties'] = (array) $schema['properties'];
+	}
+
 	if ( $is_object && ! array_key_exists( 'additionalProperties', $schema ) ) {
 		$schema['additionalProperties'] = false;
 	}

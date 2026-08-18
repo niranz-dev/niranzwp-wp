@@ -133,9 +133,28 @@ final class Abilities {
 			'niranzwp/purge-cache',
 			[
 				'label'               => __( 'Purge caches', 'niranzwp' ),
-				'description'         => __( 'Purges LiteSpeed, W3 Total Cache and WP object cache where present. Does not reach an external CDN such as Cloudflare.', 'niranzwp' ),
+				'description'         => __( 'Purges LiteSpeed, W3 Total Cache and the WP object cache. Give post_ids or urls to purge only those; scope "all" empties everything, which on a large site means rebuilding every page from the database at once. Does not reach an external CDN such as Cloudflare.', 'niranzwp' ),
 				'category'            => 'niranzwp-site',
-				'input_schema'        => [ 'type' => 'object', 'properties' => (object) [] ],
+				'input_schema'        => [
+					'type'       => 'object',
+					'properties' => [
+						'post_ids' => [
+							'type'        => 'array',
+							'description' => 'Purge the cached page for each of these posts, and nothing else.',
+							'items'       => [ 'type' => 'integer' ],
+						],
+						'urls'     => [
+							'type'        => 'array',
+							'description' => 'Purge these URLs, and nothing else. They must belong to this site.',
+							'items'       => [ 'type' => 'string' ],
+						],
+						'scope'    => [
+							'type'        => 'string',
+							'enum'        => [ 'all' ],
+							'description' => 'Set to "all" to empty every cache. Required when no post_ids or urls are given, so a full purge is always a decision rather than a default.',
+						],
+					],
+				],
 				'output_schema'       => [ 'type' => 'object' ],
 				'permission_callback' => $gate,
 				'execute_callback'    => [ self::class, 'purge_cache' ],
@@ -239,7 +258,87 @@ final class Abilities {
 	}
 
 	/** @return array<string,mixed> */
-	public static function purge_cache(): array {
+	/**
+	 * Purge caches, by default only what was named.
+	 *
+	 * A full purge is the expensive option, not the safe one. On a site with
+	 * tens of thousands of posts and a database in the gigabytes, emptying
+	 * every page means rebuilding all of them from scratch while traffic keeps
+	 * arriving; doing it repeatedly during a deploy is how an origin ends up
+	 * answering 504. The ability used to offer nothing else, which made the
+	 * dangerous call the only call.
+	 *
+	 * @return array<string,mixed>|\WP_Error
+	 */
+	public static function purge_cache( mixed $input = [] ) {
+		$input = is_array( $input ) ? $input : [];
+
+		$post_ids = array_values( array_filter( array_map( 'intval', (array) ( $input['post_ids'] ?? [] ) ) ) );
+		$urls     = array_values( array_filter( array_map( 'strval', (array) ( $input['urls'] ?? [] ) ) ) );
+		$scope    = (string) ( $input['scope'] ?? '' );
+
+		if ( ! $post_ids && ! $urls && 'all' !== $scope ) {
+			return new \WP_Error(
+				'niranzwp_no_target',
+				'Give post_ids or urls to purge those, or scope "all" to empty every cache. A full purge rebuilds every page and is never assumed.',
+				[ 'status' => 400 ]
+			);
+		}
+
+		if ( ( $post_ids || $urls ) && 'all' === $scope ) {
+			return new \WP_Error(
+				'niranzwp_conflicting_scope',
+				'scope "all" purges everything, so post_ids and urls have no meaning alongside it. Send one or the other.',
+				[ 'status' => 400 ]
+			);
+		}
+
+		if ( 'all' === $scope ) {
+			return self::purge_everything();
+		}
+
+		$home    = untrailingslashit( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
+		$done    = [ 'posts' => [], 'urls' => [] ];
+		$skipped = [];
+
+		foreach ( $post_ids as $id ) {
+			if ( ! get_post( $id ) ) {
+				$skipped[] = 'post ' . $id . ' does not exist';
+				continue;
+			}
+			// LiteSpeed listens for this whether or not its classes are
+			// loadable from here, and other caches hook the same action.
+			do_action( 'litespeed_purge_post', $id );
+			clean_post_cache( $id );
+			$done['posts'][] = $id;
+		}
+
+		foreach ( $urls as $url ) {
+			$host = (string) wp_parse_url( $url, PHP_URL_HOST );
+			if ( '' !== $host && untrailingslashit( $host ) !== $home ) {
+				$skipped[] = $url . ' belongs to another host';
+				continue;
+			}
+			do_action( 'litespeed_purge_url', $url );
+			$done['urls'][] = $url;
+		}
+
+		$out = [
+			'scope'   => 'targeted',
+			'purged'  => $done,
+			'counts'  => [ 'posts' => count( $done['posts'] ), 'urls' => count( $done['urls'] ) ],
+			'note'    => 'Only the listed entries were purged. External CDN caches such as Cloudflare are not affected.',
+		];
+
+		if ( $skipped ) {
+			$out['skipped'] = $skipped;
+		}
+
+		return $out;
+	}
+
+	/** @return array<string,mixed> */
+	private static function purge_everything(): array {
 		$purged = [];
 
 		if ( class_exists( '\LiteSpeed\Purge' ) ) {
@@ -256,8 +355,9 @@ final class Abilities {
 		}
 
 		return [
-			'purged' => $purged,
-			'note'   => 'External CDN caches such as Cloudflare are not affected and must be purged separately.',
+			'scope'   => 'all',
+			'purged'  => $purged,
+			'note'    => 'Every cached page will be rebuilt on next request. External CDN caches such as Cloudflare are not affected and must be purged separately.',
 		];
 	}
 }
