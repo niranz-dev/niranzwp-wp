@@ -15,10 +15,12 @@ final class Admin {
 
 	private const SLUG  = 'niranzwp';
 	private const NONCE = 'niranzwp_save';
+	private const TOGGLE_NONCE = 'niranzwp_toggle';
 
 	public static function init(): void {
 		add_action( 'admin_menu', [ self::class, 'menu' ] );
 		add_action( 'admin_post_niranzwp_save', [ self::class, 'handle_save' ] );
+		add_action( 'admin_post_niranzwp_toggle', [ self::class, 'handle_toggle' ] );
 		add_action( 'admin_bar_menu', [ self::class, 'admin_bar' ], 100 );
 	}
 
@@ -33,15 +35,115 @@ final class Admin {
 		add_submenu_page( self::SLUG, __( 'Troubleshoot', 'niranzwp' ), __( 'Troubleshoot', 'niranzwp' ), CAPABILITY, self::SLUG . '-troubleshoot', [ self::class, 'render_troubleshoot' ] );
 	}
 
+	/**
+	 * The admin bar badge, and what sits under it.
+	 *
+	 * Red rather than blue on purpose. This is not a status light saying
+	 * things are fine - it says something with full write access to the site
+	 * is switched on right now, which is worth noticing every time you load a
+	 * page rather than only when you go looking.
+	 *
+	 * The menu reports the three switches separately, because "on" is not one
+	 * thing: abilities can be live while file writes are off, and the recovery
+	 * guard only exists while file writes are on. A site with file writes
+	 * enabled and no guard is the one combination worth shouting about, so it
+	 * gets its own line.
+	 */
 	public static function admin_bar( \WP_Admin_Bar $bar ): void {
 		if ( ! Settings::active() || ! current_user_can( CAPABILITY ) ) {
 			return;
 		}
+
+		$settings = get_option( OPTION_KEY, [] );
+		$files    = is_array( $settings ) && ! empty( $settings['files'] );
+		$runtime  = is_array( $settings ) && ! empty( $settings['runtime'] );
+		$guard    = Recovery::installed();
+
 		$bar->add_node( [
 			'id'    => 'niranzwp-on',
-			'title' => '<span style="background:#2271b1;color:#fff;padding:0 8px;border-radius:3px;font-weight:600">NiranzWP ON</span>',
+			'title' => '<span style="background:#b32d2e;color:#fff;padding:0 8px;border-radius:3px;font-weight:600">NiranzWP ON</span>',
 			'href'  => admin_url( 'admin.php?page=' . self::SLUG ),
+			'meta'  => [ 'title' => __( 'NiranzWP has write access to this site', 'niranzwp' ) ],
 		] );
+
+		$rows = [
+			'abilities' => [ __( 'AI Abilities', 'niranzwp' ), true ],
+			'files'     => [ __( 'File writes', 'niranzwp' ), $files ],
+			'runtime'   => [ __( 'PHP runtime', 'niranzwp' ), $runtime ],
+		];
+
+		foreach ( $rows as $key => [ $label, $on ] ) {
+			$bar->add_node( [
+				'id'     => 'niranzwp-state-' . $key,
+				'parent' => 'niranzwp-on',
+				'title'  => sprintf(
+					'%s: <strong>%s</strong>',
+					esc_html( $label ),
+					$on ? esc_html__( 'On', 'niranzwp' ) : esc_html__( 'Off', 'niranzwp' )
+				),
+				'href'   => admin_url( 'admin.php?page=' . self::SLUG ),
+			] );
+		}
+
+		// Only worth a line when file writes are on, since that is the switch
+		// the guard is tied to.
+		if ( $files ) {
+			$bar->add_node( [
+				'id'     => 'niranzwp-state-guard',
+				'parent' => 'niranzwp-on',
+				'title'  => $guard
+					? esc_html__( 'Recovery guard: Installed', 'niranzwp' )
+					: '<span style="color:#ffb900">' . esc_html__( 'Recovery guard: MISSING', 'niranzwp' ) . '</span>',
+				'href'   => admin_url( 'admin.php?page=' . self::SLUG ),
+			] );
+		}
+
+		$checkpoints = count( Checkpoint::all( 100 ) );
+		$bar->add_node( [
+			'id'     => 'niranzwp-checkpoints',
+			'parent' => 'niranzwp-on',
+			'title'  => sprintf(
+				/* translators: %d: number of checkpoints kept. */
+				_n( '%d checkpoint kept', '%d checkpoints kept', $checkpoints, 'niranzwp' ),
+				$checkpoints
+			),
+			'href'   => admin_url( 'admin.php?page=' . self::SLUG . '-checkpoints' ),
+		] );
+
+		$bar->add_node( [
+			'id'     => 'niranzwp-toggle',
+			'parent' => 'niranzwp-on',
+			'title'  => esc_html__( 'Turn off AI Abilities', 'niranzwp' ),
+			'href'   => wp_nonce_url(
+				admin_url( 'admin-post.php?action=niranzwp_toggle' ),
+				self::TOGGLE_NONCE
+			),
+		] );
+
+		$bar->add_node( [
+			'id'     => 'niranzwp-config',
+			'parent' => 'niranzwp-on',
+			'title'  => esc_html__( 'Configuration', 'niranzwp' ),
+			'href'   => admin_url( 'admin.php?page=' . self::SLUG ),
+		] );
+	}
+
+	/**
+	 * One-click off from the admin bar.
+	 *
+	 * Only ever switches off. Turning this back on means going to the settings
+	 * page and seeing what else is being enabled alongside it, which is not
+	 * something a single click from a toolbar should do.
+	 */
+	public static function handle_toggle(): void {
+		if ( ! current_user_can( CAPABILITY ) || ! check_admin_referer( self::TOGGLE_NONCE ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'niranzwp' ), '', [ 'response' => 403 ] );
+		}
+
+		Settings::set_enabled( false );
+
+		wp_safe_redirect( add_query_arg( 'niranzwp_off', '1', wp_get_referer() ?: admin_url() ) );
+		exit;
 	}
 
 	public static function handle_save(): void {
