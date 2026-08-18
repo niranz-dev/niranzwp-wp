@@ -239,14 +239,37 @@ final class Skills {
 		if ( '' === $slug ) {
 			return new \WP_Error( 'niranzwp_bad_slug', 'A skill needs a slug.' );
 		}
+		/*
+		 * Both caps exist for the same reason: a skill body is handed to the
+		 * agent verbatim, and the catalogue of every skill is part of its
+		 * standing instructions. Unbounded here means an unbounded prompt,
+		 * which fails quietly by crowding out the actual work rather than by
+		 * erroring. 64 KiB is already a long document; a megabyte is not a
+		 * limit that protects anything.
+		 */
 		if ( strlen( $body ) > self::MAX_BODY ) {
-			return new \WP_Error( 'niranzwp_too_large', sprintf( 'Skill body is %d bytes; the limit is %d.', strlen( $body ), self::MAX_BODY ) );
+			return new \WP_Error(
+				'niranzwp_too_large',
+				sprintf(
+					'Skill body is %s; the limit is %s. A skill is loaded into the agent\'s prompt whole, so a long one crowds out the work. Split it, or link to a document instead of pasting it.',
+					size_format( strlen( $body ) ),
+					size_format( self::MAX_BODY )
+				),
+				[ 'status' => 413 ]
+			);
 		}
 
 		$existing = self::find( $slug );
 
 		if ( ! $existing && count( self::all() ) >= self::MAX_SKILLS ) {
-			return new \WP_Error( 'niranzwp_too_many', sprintf( 'This site already has %d skills.', self::MAX_SKILLS ) );
+			return new \WP_Error(
+				'niranzwp_too_many',
+				sprintf(
+					'This site already has %d skills, which is the limit. Every skill is listed in the agent\'s standing instructions, so the catalogue grows the prompt on every request. Delete one that is no longer used.',
+					self::MAX_SKILLS
+				),
+				[ 'status' => 409 ]
+			);
 		}
 
 		// Rewriting a skill loses whatever it said before, so snapshot first --
