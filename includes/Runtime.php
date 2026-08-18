@@ -28,6 +28,13 @@ final class Runtime {
 	/** Hard ceiling so a runaway snippet cannot hold a worker forever. */
 	private const TIME_LIMIT = 30;
 
+	/**
+	 * Warnings are collected rather than printed, so a cap is needed: a loop
+	 * that warns on every iteration would otherwise build an unbounded array
+	 * and the response would be the warnings rather than the answer.
+	 */
+	private const MAX_DIAGNOSTICS = 100;
+
 	public static function enabled(): bool {
 		$s = get_option( OPTION_KEY, [] );
 		return is_array( $s ) && ! empty( $s['runtime'] );
@@ -90,9 +97,36 @@ final class Runtime {
 			@set_time_limit( self::TIME_LIMIT ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
 		}
 
-		$started = microtime( true );
-		$value   = null;
-		$error   = null;
+		$started     = microtime( true );
+		$value       = null;
+		$error       = null;
+		$diagnostics = [];
+
+		/*
+		 * Warnings, notices and deprecations are not thrown, so the catch below
+		 * never sees them. Left alone they either print into the captured
+		 * output or vanish entirely depending on display_errors, and code that
+		 * half-worked reports success either way -- an undefined array key
+		 * reads exactly like a clean run.
+		 *
+		 * The handler returns true, which stops PHP printing them as well, so
+		 * they arrive as data instead of contaminating `output`. Fatals are
+		 * unaffected: set_error_handler never sees those, and the recovery
+		 * guard's error_get_last() still does.
+		 */
+		set_error_handler(
+			static function ( int $severity, string $message, string $file = '', int $line = 0 ) use ( &$diagnostics ): bool {
+				if ( count( $diagnostics ) < self::MAX_DIAGNOSTICS ) {
+					$diagnostics[] = [
+						'type'    => self::severity_name( $severity ),
+						'message' => $message,
+						'file'    => $file,
+						'line'    => $line,
+					];
+				}
+				return true;
+			}
+		);
 
 		ob_start();
 		try {
@@ -105,15 +139,42 @@ final class Runtime {
 			];
 		} finally {
 			$printed = (string) ob_get_clean();
+			restore_error_handler();
 		}
+
+		$truncated = count( $diagnostics ) >= self::MAX_DIAGNOSTICS;
 
 		return [
 			'success'      => null === $error,
 			'return_value' => self::serializable( $value ),
 			'output'       => $printed,
 			'error'        => $error,
+			'errors'       => $diagnostics,
+			'errors_note'  => $truncated
+				? 'Stopped collecting at ' . self::MAX_DIAGNOSTICS . '; more were raised.'
+				: null,
 			'ms'           => round( ( microtime( true ) - $started ) * 1000, 2 ),
 		];
+	}
+
+	/**
+	 * A readable name for an E_* constant. Unknown values are reported as their
+	 * number rather than guessed at, since new levels do get added.
+	 */
+	private static function severity_name( int $severity ): string {
+		$names = [
+			E_WARNING           => 'warning',
+			E_NOTICE            => 'notice',
+			E_DEPRECATED        => 'deprecated',
+			E_STRICT            => 'strict',
+			E_RECOVERABLE_ERROR => 'recoverable error',
+			E_USER_WARNING      => 'user warning',
+			E_USER_NOTICE       => 'user notice',
+			E_USER_DEPRECATED   => 'user deprecated',
+			E_USER_ERROR        => 'user error',
+		];
+
+		return $names[ $severity ] ?? 'severity ' . $severity;
 	}
 
 	/**
