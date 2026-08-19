@@ -215,7 +215,7 @@ final class Hub {
 
 		<div class="nzwp-card" style="margin-bottom:16px">
 			<p class="nzwp-desc" style="margin:0">
-				<?php esc_html_e( 'Every ability exposed to connected clients, from this plugin and from anything else on the site that uses the WordPress Abilities API. Switching one off removes it from discovery and it can no longer be executed.', 'niranzwp' ); ?>
+				<?php esc_html_e( 'Every ability a connected client can reach, from this plugin and from anything else on the site that uses the WordPress Abilities API. Switching one off removes it from discovery and it can no longer be run.', 'niranzwp' ); ?>
 			</p>
 		</div>
 

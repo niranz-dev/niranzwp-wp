@@ -621,6 +621,37 @@ final class Admin {
 .nzwp-desc{color:#50575e;margin:6px 0 0;font-size:13px;line-height:1.6;max-width:72ch}
 .nzwp-desc code{font-size:12.5px}
 
+/* --------------------------------------------------------- note cards --- */
+/* A card whose first child is body text is a note, not a section. Sections
+   open with a numbered heading that anchors the block; a note has nothing to
+   anchor it, so the same generous padding reads as an empty box with a
+   sentence in the corner. Selected with :has() rather than a new class so
+   every screen picks it up without its markup being touched. */
+.nzwp-card:has(> .nzwp-desc:first-child){
+	padding:15px 18px;
+	background:#fcfcfd;
+	border-left:3px solid #c4b5fd;
+	border-radius:0 8px 8px 0;
+}
+.nzwp-card:has(> .nzwp-desc:first-child) > .nzwp-desc{max-width:80ch}
+.nzwp-card:has(> .nzwp-desc:first-child) > .nzwp-desc + .nzwp-desc{margin-top:10px}
+
+/* A paragraph that opens in bold is a caveat - "This is not a backup", "Leave
+   this off on a production site" - and was set identically to the sentence
+   above it. Amber rather than red: it qualifies something, it does not warn of
+   damage. 7.3:1 on its own tint. */
+.nzwp-card .nzwp-desc:has(> strong:first-child){
+	background:#fdf6e7;
+	border-left:3px solid #dba617;
+	border-radius:0 4px 4px 0;
+	padding:10px 13px;
+	color:#5b4715;
+	max-width:78ch;
+}
+.nzwp-card .nzwp-desc:has(> strong:first-child) > strong{color:#6b5416}
+/* Without :has() both fall back to the plain card, which is what they look
+   like today - correct, just flatter. */
+
 /* ============================================================= badges === */
 /* Tags, not pills, in content: 3px radius, sentence case. Uppercase was
    tempting and rejected — Abilities Hub prints up to three badges on each
@@ -1013,7 +1044,7 @@ final class Admin {
 			case __( 'Troubleshoot', 'niranzwp' ):
 				return __( 'What is wrong, and what to do about it.', 'niranzwp' );
 			default:
-				return __( 'What this site exposes to command-line tools and AI clients.', 'niranzwp' );
+				return __( 'What command-line tools and AI clients can reach on this site.', 'niranzwp' );
 		}
 	}
 
