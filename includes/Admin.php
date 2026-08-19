@@ -560,6 +560,38 @@ final class Admin {
 	background-image:linear-gradient(180deg,#0f815a,#0c6a49);
 	color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.20);
 }
+/* The edition chip. Gold is the one colour on this bar that reads as paid
+   without saying so, but gold is light, so the text has to go dark rather
+   than white - #3d2a00 on the top stop is 9.4:1, which is the reverse of how
+   the green chip is built and the reason it cannot simply copy it. Slightly
+   tracked out and a shade heavier, because it is one short word and needs the
+   weight to sit level with the longer chip beside it. */
+.nzwp-lic{
+	border-radius:999px;padding:3px 11px;
+	font-size:12px;font-weight:600;letter-spacing:.03em;
+	white-space:nowrap;flex:none;
+}
+.nzwp-lic-pro{
+	background-color:#e8b23a;
+	background-image:linear-gradient(180deg,#f5c451,#dfa62b);
+	color:#3d2a00;
+	box-shadow:inset 0 1px 0 rgba(255,255,255,.45), 0 1px 2px rgba(0,0,0,.18);
+}
+/* Free and lapsed both step back rather than compete: this chip should only
+   pull the eye when there is something to be pleased about. */
+.nzwp-lic-free{
+	background-color:rgba(255,255,255,.14);
+	background-image:none;
+	color:rgba(255,255,255,.92);
+	box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);
+}
+.nzwp-lic-lapsed{
+	background-color:rgba(245,196,81,.16);
+	background-image:none;
+	color:#f7d489;
+	box-shadow:inset 0 0 0 1px rgba(245,196,81,.42);
+}
+
 .nzwp-bar .nzwp-off{
 	background-color:rgba(255,255,255,.14);
 	background-image:none;
@@ -1053,7 +1085,7 @@ final class Admin {
 					<a class="nzwp-by" href="https://niranz.dev" target="_blank" rel="noopener noreferrer">
 						<?php esc_html_e( 'Developed by Niranjan', 'niranzwp' ); ?>
 					</a>
-					<span class="nzwp-free"><?php esc_html_e( 'Open source, free forever', 'niranzwp' ); ?></span>
+					<span class="nzwp-free"><?php esc_html_e( 'Open source', 'niranzwp' ); ?></span>
 					<a class="nzwp-gh" href="<?php echo esc_url( GITHUB_URL ); ?>" target="_blank" rel="noopener noreferrer"
 						aria-label="<?php esc_attr_e( 'NiranzWP on GitHub', 'niranzwp' ); ?>"
 						title="<?php esc_attr_e( 'NiranzWP on GitHub', 'niranzwp' ); ?>"></a>
@@ -1061,6 +1093,11 @@ final class Admin {
 				<span class="nzwp-bar-meta">
 					<span class="nzwp-badge <?php echo Settings::active() ? 'nzwp-on' : 'nzwp-off'; ?>">
 						<?php echo Settings::active() ? esc_html__( 'AI abilities on', 'niranzwp' ) : esc_html__( 'AI abilities off', 'niranzwp' ); ?>
+					</span>
+					<?php $nzwp_lic = License::badge(); ?>
+					<span class="nzwp-lic <?php echo esc_attr( $nzwp_lic['class'] ); ?>"
+						title="<?php echo esc_attr( $nzwp_lic['title'] ); ?>">
+						<?php echo esc_html( $nzwp_lic['label'] ); ?>
 					</span>
 					<span class="nzwp-ver"><?php echo esc_html( VERSION ); ?></span>
 				</span>

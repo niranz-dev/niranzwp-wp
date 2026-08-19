@@ -173,6 +173,6 @@ keep them passing.
 
 ## Licence
 
-MIT. Open source, free forever.
+MIT.
 
 <div align="center"><sub>Built by <a href="https://niranz.dev">Niranjan</a></sub></div>

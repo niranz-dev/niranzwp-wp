@@ -33,6 +33,7 @@ define( 'NIRANZWP_FILE', __FILE__ );
 define( 'NIRANZWP_DIR', plugin_dir_path( __FILE__ ) );
 
 require_once NIRANZWP_DIR . 'includes/Settings.php';
+require_once NIRANZWP_DIR . 'includes/License.php';
 require_once NIRANZWP_DIR . 'includes/Register.php';
 require_once NIRANZWP_DIR . 'includes/Abilities.php';
 require_once NIRANZWP_DIR . 'includes/Seo.php';
