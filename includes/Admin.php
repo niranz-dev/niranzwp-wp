@@ -73,13 +73,13 @@ final class Admin {
 				color:#fff;
 				padding:0 12px;
 				border-radius:999px;
-				background:linear-gradient(180deg,#e03a35 0%,#c62828 100%);
-				/* A thin light edge reads as a raised surface, then two shadows:
-				   a tight one for the lift and a wide soft one for the glow. */
+				background:linear-gradient(180deg,#ff2424 0%,#e10000 100%);
+				/* A thin light edge for the raised surface and a tight shadow
+				   for the lift. No outer glow: at 12px in a toolbar it bled
+				   into everything around it. */
 				box-shadow:
 					inset 0 1px 0 rgba(255,255,255,.28),
-					0 1px 3px rgba(0,0,0,.35),
-					0 0 14px rgba(224,58,53,.55);
+					0 1px 3px rgba(0,0,0,.35);
 				transition:box-shadow .18s ease;
 				/* The gloss below is absolutely placed, and clipped to the pill
 				   so it sweeps the shape rather than past it. */
@@ -96,19 +96,24 @@ final class Admin {
 				top:-14px;
 				bottom:-14px;
 				left:0;
-				width:18px;
+				width:30px;
 				z-index:2;
 				pointer-events:none;
-				background:#fff;
-				filter:blur(8px);
+				/* Soft-edged rather than a hard bar, so it reads as light
+				   crossing the surface instead of a rectangle sliding over it. */
+				background:linear-gradient(90deg,
+					rgba(255,255,255,0) 0%,
+					rgba(255,255,255,.95) 50%,
+					rgba(255,255,255,0) 100%);
+				filter:blur(5px);
 				opacity:0;
-				transform:translateX(-14px) rotate(20deg);
-				transition:transform .65s cubic-bezier(.2,.7,.25,1),
-				           opacity .65s cubic-bezier(.2,.7,.25,1);
+				transform:translateX(-34px) rotate(18deg);
+				transition:transform .5s cubic-bezier(.2,.7,.25,1),
+				           opacity .18s ease;
 			}
 			#wpadminbar .nzwp-pill:hover::before{
-				opacity:.28;
-				transform:translateX(150px) rotate(20deg);
+				opacity:.75;
+				transform:translateX(140px) rotate(18deg);
 			}
 			@media (prefers-reduced-motion: reduce){
 				#wpadminbar .nzwp-pill::before{transition-duration:.01ms}
@@ -117,8 +122,7 @@ final class Admin {
 			#wpadminbar .nzwp-pill:hover{
 				box-shadow:
 					inset 0 1px 0 rgba(255,255,255,.34),
-					0 1px 3px rgba(0,0,0,.4),
-					0 0 22px rgba(224,58,53,.85);
+					0 2px 5px rgba(0,0,0,.42);
 			}
 			/* The toolbar sets its own line-height on links; without this the
 			   pill sits low against the 32px bar. */
