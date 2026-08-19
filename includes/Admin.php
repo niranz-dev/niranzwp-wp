@@ -25,10 +25,15 @@ final class Admin {
 		add_action( 'admin_post_niranzwp_save', [ self::class, 'handle_save' ] );
 		add_action( 'admin_post_niranzwp_toggle', [ self::class, 'handle_toggle' ] );
 		add_action( 'admin_bar_menu', [ self::class, 'admin_bar' ], 100 );
-		// The badge shows on every screen the toolbar does, front end included,
-		// so its styles cannot live in the plugin pages' inline block.
-		add_action( 'admin_head', [ self::class, 'bar_styles' ] );
-		add_action( 'wp_head', [ self::class, 'bar_styles' ] );
+		/*
+		 * Printed immediately before the toolbar itself rather than in either
+		 * head. admin_bar_menu fires from inside wp_admin_bar_render(), which
+		 * runs on in_admin_header and wp_body_open -- both after admin_head
+		 * and wp_head, so anything hooked there decides before the badge
+		 * exists. This hook fires in the same pass, just earlier, so it runs
+		 * exactly when the bar is about to render and never otherwise.
+		 */
+		add_action( 'wp_before_admin_bar_render', [ self::class, 'bar_styles' ] );
 	}
 
 	public static function menu(): void {
@@ -51,10 +56,6 @@ final class Admin {
 	 * weights it uses.
 	 */
 	public static function bar_styles(): void {
-		// admin_bar_menu runs on init, before either head hook, so the badge
-		// has already decided whether it exists. Asking it is exact, where
-		// is_admin_bar_showing() answers differently depending on the request
-		// type and would drop the styles on screens that do show the bar.
 		if ( ! self::$badge_rendered ) {
 			return;
 		}
@@ -80,8 +81,28 @@ final class Admin {
 					0 1px 3px rgba(0,0,0,.35),
 					0 0 14px rgba(224,58,53,.55);
 				transition:box-shadow .18s ease, transform .18s ease;
+				/* A slow breathe rather than a blink. This is a standing state,
+				   not an alert -- it should catch the eye once and then stay
+				   out of the way. */
+				animation:nzwp-breathe 2.8s ease-in-out infinite;
+			}
+			@keyframes nzwp-breathe{
+				0%,100%{box-shadow:
+					inset 0 1px 0 rgba(255,255,255,.28),
+					0 1px 3px rgba(0,0,0,.35),
+					0 0 10px rgba(224,58,53,.40);}
+				50%{box-shadow:
+					inset 0 1px 0 rgba(255,255,255,.32),
+					0 1px 3px rgba(0,0,0,.35),
+					0 0 20px rgba(224,58,53,.80);}
+			}
+			/* Anything that animates forever has to be switchable off, and the
+			   browser already knows the answer. */
+			@media (prefers-reduced-motion: reduce){
+				#wpadminbar .nzwp-pill{animation:none}
 			}
 			#wpadminbar .nzwp-pill:hover{
+				animation:none;
 				box-shadow:
 					inset 0 1px 0 rgba(255,255,255,.34),
 					0 1px 3px rgba(0,0,0,.4),
