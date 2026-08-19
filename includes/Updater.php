@@ -29,7 +29,14 @@ defined( 'ABSPATH' ) || exit;
 
 final class Updater {
 
-	private const MANIFEST  = 'https://niranz.dev/niranzwp/plugin.json';
+	/*
+	 * GitHub keeps /releases/latest/download/<asset> pointing at whatever the
+	 * newest published release is, so this URL never has to change and there is
+	 * no file to keep in sync anywhere else. The previous address answered every
+	 * unknown path with the site's own HTML, which the updater read as "no
+	 * manifest" - a broken check that looked exactly like being up to date.
+	 */
+	private const MANIFEST  = 'https://github.com/niranz-dev/niranzwp-wp/releases/latest/download/plugin.json';
 	private const TRANSIENT = 'niranzwp_update_manifest';
 	private const TTL       = 12 * HOUR_IN_SECONDS;
 

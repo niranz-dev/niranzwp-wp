@@ -14,7 +14,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 const run = promisify(execFile);
-const CLI = process.env.NIRANZWP_CLI || '/Users/niel/Downloads/niranz/bin/niranzwp.js';
+const CLI = process.env.NIRANZWP_CLI || 'niranzwp';
 const SITE = process.argv.includes('--site') ? process.argv[process.argv.indexOf('--site') + 1] : 'local';
 
 async function cli(args) {
