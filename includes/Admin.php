@@ -16,6 +16,7 @@ final class Admin {
 	private const SLUG  = 'niranzwp';
 	private const NONCE = 'niranzwp_save';
 	private const TOGGLE_NONCE = 'niranzwp_toggle';
+	private const APPROVE_NONCE = 'niranzwp_approve';
 
 	/** Set when the toolbar badge is added, read when its styles are printed. */
 	private static bool $badge_rendered = false;
@@ -24,6 +25,7 @@ final class Admin {
 		add_action( 'admin_menu', [ self::class, 'menu' ] );
 		add_action( 'admin_post_niranzwp_save', [ self::class, 'handle_save' ] );
 		add_action( 'admin_post_niranzwp_toggle', [ self::class, 'handle_toggle' ] );
+		add_action( 'admin_post_niranzwp_approve', [ self::class, 'handle_approve' ] );
 		add_action( 'admin_notices', [ self::class, 'activation_notice' ] );
 		add_action( 'admin_bar_menu', [ self::class, 'admin_bar' ], 100 );
 		/*
@@ -46,6 +48,96 @@ final class Admin {
 		add_submenu_page( self::SLUG, __( 'Skills', 'niranzwp' ), __( 'Skills', 'niranzwp' ), CAPABILITY, self::SLUG . '-skills', [ SkillsAdmin::class, 'render' ] );
 		add_submenu_page( self::SLUG, __( 'Checkpoints', 'niranzwp' ), __( 'Checkpoints', 'niranzwp' ), CAPABILITY, self::SLUG . '-checkpoints', [ CheckpointAdmin::class, 'render' ] );
 		add_submenu_page( self::SLUG, __( 'Troubleshoot', 'niranzwp' ), __( 'Troubleshoot', 'niranzwp' ), CAPABILITY, self::SLUG . '-troubleshoot', [ self::class, 'render_troubleshoot' ] );
+		// The device-code screen. Registered under a null parent so it has a URL
+		// to send someone to without adding a menu row nobody navigates to.
+		add_submenu_page( null, __( 'Connect a tool', 'niranzwp' ), __( 'Connect a tool', 'niranzwp' ), CAPABILITY, self::SLUG . '-connect', [ self::class, 'render_connect' ] );
+	}
+
+	/**
+	 * Where a device code is approved.
+	 *
+	 * The whole security boundary of the device grant is this screen: everything
+	 * before it is a client asking, and everything after it is a token acting as
+	 * whoever is reading this. So it names the client, and it does not
+	 * auto-submit a code arriving in the URL - a link someone was sent should
+	 * not be able to approve itself.
+	 */
+	public static function render_connect(): void {
+		self::header( __( 'Connect a tool', 'niranzwp' ) );
+
+		$code = isset( $_GET['code'] ) ? OAuth::normalise_code( sanitize_text_field( wp_unslash( (string) $_GET['code'] ) ) ) : '';
+
+		if ( isset( $_GET['approved'] ) ) {
+			echo '<div class="notice notice-success"><p>'
+				. esc_html__( 'Approved. The tool that asked will connect within a few seconds - you can close this page.', 'niranzwp' )
+				. '</p></div>';
+		}
+		if ( isset( $_GET['failed'] ) ) {
+			echo '<div class="notice notice-error"><p>'
+				. esc_html__( 'That code is not recognised, or it expired. Codes last ten minutes; run the command again for a fresh one.', 'niranzwp' )
+				. '</p></div>';
+		}
+
+		$pending = '' !== $code ? OAuth::pending( $code ) : null;
+		?>
+		<div class="nzwp-card">
+			<h2><span class="nzwp-num">1</span><?php esc_html_e( 'Enter the code', 'niranzwp' ); ?></h2>
+			<p class="nzwp-desc" style="margin-top:0">
+				<?php esc_html_e( 'Your terminal is showing an eight-character code. Type it here and approve.', 'niranzwp' ); ?>
+			</p>
+
+			<?php if ( $pending ) : ?>
+				<p class="nzwp-desc">
+					<strong><?php esc_html_e( 'Waiting for approval:', 'niranzwp' ); ?></strong>
+					<?php
+					printf(
+						/* translators: %s: the name the client registered itself under. */
+						esc_html__( '%s is asking to connect to this site. Approving gives it everything you can do here.', 'niranzwp' ),
+						'<code>' . esc_html( $pending['client_name'] ) . '</code>'
+					);
+					?>
+				</p>
+			<?php endif; ?>
+
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<input type="hidden" name="action" value="niranzwp_approve">
+				<?php wp_nonce_field( self::APPROVE_NONCE ); ?>
+				<p>
+					<input type="text" name="user_code" class="nzwp-code-input"
+						value="<?php echo esc_attr( $code ); ?>"
+						placeholder="XXXX-XXXX" autocomplete="off" spellcheck="false"
+						autocapitalize="characters" required>
+				</p>
+				<?php submit_button( __( 'Approve this connection', 'niranzwp' ), 'primary', 'submit', false ); ?>
+			</form>
+		</div>
+		<style>
+			.nzwp-code-input{
+				font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+				font-size:22px;letter-spacing:.16em;text-transform:uppercase;
+				padding:8px 12px;width:220px;text-align:center;
+			}
+		</style>
+		<?php
+		echo '</div>';
+	}
+
+	public static function handle_approve(): void {
+		if ( ! current_user_can( CAPABILITY ) || ! check_admin_referer( self::APPROVE_NONCE ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'niranzwp' ), '', [ 'response' => 403 ] );
+		}
+
+		$code = OAuth::normalise_code( sanitize_text_field( wp_unslash( (string) ( $_POST['user_code'] ?? '' ) ) ) );
+		$ok   = OAuth::approve( $code, get_current_user_id() );
+
+		wp_safe_redirect(
+			add_query_arg(
+				$ok ? 'approved' : 'failed',
+				'1',
+				admin_url( 'admin.php?page=' . self::SLUG . '-connect' )
+			)
+		);
+		exit;
 	}
 
 	/**

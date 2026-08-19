@@ -54,6 +54,7 @@ require_once NIRANZWP_DIR . 'includes/Runtime.php';
 require_once NIRANZWP_DIR . 'includes/Cli.php';
 require_once NIRANZWP_DIR . 'includes/Mcp.php';
 require_once NIRANZWP_DIR . 'includes/Connections.php';
+require_once NIRANZWP_DIR . 'includes/OAuth.php';
 require_once NIRANZWP_DIR . 'includes/Admin.php';
 require_once NIRANZWP_DIR . 'includes/Details.php';
 require_once NIRANZWP_DIR . 'includes/Updater.php';
@@ -91,6 +92,7 @@ function boot(): void {
 	Abilities::init();
 	Mcp::init();
 	Connections::init();
+	OAuth::init();
 	Admin::init();
 	Details::init();
 	Updater::init();
