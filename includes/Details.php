@@ -115,7 +115,7 @@ final class Details {
 			'homepage'      => 'https://niranz.dev',
 			'requires'      => '6.9',
 			'requires_php'  => '8.0',
-			'tested'        => '7.0',
+			'tested'        => self::readme_header( 'Tested up to' ) ?: '7.0',
 			'last_updated'  => gmdate( 'Y-m-d', (int) filemtime( NIRANZWP_FILE ) ),
 			'download_link' => '',
 			'sections'      => [
@@ -176,20 +176,54 @@ niranzwp auth login ' . esc_html( (string) wp_parse_url( home_url(), PHP_URL_HOS
 			and best left off on anything serving real traffic.</p>';
 	}
 
+	/**
+	 * The changelog, read from readme.txt.
+	 *
+	 * It used to be a block of HTML in this file, which meant it was correct
+	 * exactly once - the modal was still announcing 1.0.0 four major versions
+	 * later. readme.txt already carries the canonical list in the format
+	 * WordPress defined for it, so this reads that and stops there being two
+	 * places to remember.
+	 */
+	/** One header value out of readme.txt, so the file stays the single source. */
+	private static function readme_header( string $key ): string {
+		$readme = plugin_dir_path( NIRANZWP_FILE ) . 'readme.txt';
+		if ( ! is_readable( $readme ) ) {
+			return '';
+		}
+		$head = (string) substr( (string) file_get_contents( $readme ), 0, 1024 );
+		return preg_match( '/^' . preg_quote( $key, '/' ) . ':\s*(.+)$/mi', $head, $m )
+			? trim( $m[1] )
+			: '';
+	}
+
 	private static function changelog(): string {
-		return '
-			<h4>1.0.0</h4>
-			<ul>
-				<li>Checkpoints, taken automatically before every destructive write, with a timeline
-					screen to restore from.</li>
-				<li>Recovery guard: puts a file back when the request that loaded it dies.</li>
-				<li>PHP that does not parse is refused rather than written.</li>
-				<li>Context and skills: the standing brief for this site, and per-job instructions,
-					both editable from wp-admin.</li>
-				<li>Abilities Hub: every ability on the site, from any plugin, with a switch on each.</li>
-				<li>Elementor: read, search and update layouts.</li>
-				<li>Gutenberg: read and write blocks, validated against the block registry.</li>
-				<li>SEO and GEO audits, content audits, batch meta and alt text.</li>
-			</ul>';
+		$readme = plugin_dir_path( NIRANZWP_FILE ) . 'readme.txt';
+		if ( ! is_readable( $readme ) ) {
+			return '';
+		}
+
+		$body = (string) file_get_contents( $readme );
+		if ( ! preg_match( '/==\s*Changelog\s*==(.*?)(?:\n==\s|$)/s', $body, $m ) ) {
+			return '';
+		}
+
+		$out = '';
+		foreach ( preg_split( '/\n(?==\s)/', trim( $m[1] ) ) as $block ) {
+			if ( ! preg_match( '/^=\s*(.+?)\s*=\s*(.*)$/s', trim( $block ), $b ) ) {
+				continue;
+			}
+			$items = '';
+			foreach ( preg_split( '/\n(?=\*\s)/', trim( $b[2] ) ) as $line ) {
+				$line = trim( preg_replace( '/^\*\s*/', '', trim( $line ) ) ?? '' );
+				if ( '' !== $line ) {
+					$items .= '<li>' . esc_html( preg_replace( '/\s+/', ' ', $line ) ) . '</li>';
+				}
+			}
+			$out .= '<h4>' . esc_html( $b[1] ) . '</h4>';
+			$out .= $items ? '<ul>' . $items . '</ul>' : '';
+		}
+
+		return $out;
 	}
 }

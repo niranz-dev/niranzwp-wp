@@ -87,33 +87,27 @@ final class Connections {
 	 */
 
 	/**
-	 * A time, said twice.
+	 * How a time is shown.
 	 *
-	 * "in 4 weeks" answers the question a person actually has, and an exact
-	 * timestamp answers the one they have next - when a connection is being
-	 * matched against something else that happened, or written down. Showing
-	 * only the relative form makes the second question a calculation; showing
-	 * only the timestamp makes the first one a calculation.
+	 * "21 minutes ago" is the right answer for last used - the question there is
+	 * whether anything is still alive, and a relative answer settles it at a
+	 * glance. Expiry is a different question: it is a date somebody plans
+	 * around, so it is given as one.
 	 *
-	 * wp_date(), not gmdate(), so the exact line is in the timezone the site is
-	 * configured for rather than UTC.
+	 * wp_date(), not gmdate(), so it is the timezone the site is set to rather
+	 * than UTC.
 	 */
 	private static function when( int $ts, bool $future = false ): string {
 		if ( ! $ts ) {
 			return '<span style="color:#8c8f94">' . esc_html__( 'never', 'niranzwp' ) . '</span>';
 		}
 
-		$relative = $future
-			/* translators: %s: a length of time, e.g. "4 weeks". */
-			? sprintf( __( 'in %s', 'niranzwp' ), human_time_diff( time(), $ts ) )
-			/* translators: %s: a length of time, e.g. "21 minutes". */
-			: sprintf( __( '%s ago', 'niranzwp' ), human_time_diff( $ts ) );
+		if ( $future ) {
+			return esc_html( wp_date( 'j M Y, H:i', $ts ) );
+		}
 
-		return sprintf(
-			'%s<br><span style="color:#8c8f94;font-size:11px">%s</span>',
-			esc_html( $relative ),
-			esc_html( wp_date( 'j M Y, H:i', $ts ) )
-		);
+		/* translators: %s: a length of time, e.g. "21 minutes". */
+		return esc_html( sprintf( __( '%s ago', 'niranzwp' ), human_time_diff( $ts ) ) );
 	}
 
 	private static function styles(): void {

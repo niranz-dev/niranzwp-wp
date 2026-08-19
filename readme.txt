@@ -2,9 +2,9 @@
 Contributors: niranjan
 Tags: cli, rest-api, abilities, seo, automation
 Requires at least: 6.9
-Tested up to: 7.0
+Tested up to: 7.0.4
 Requires PHP: 8.0
-Stable tag: 5.3.6
+Stable tag: 5.3.7
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -104,6 +104,56 @@ or capturable, and wp-admin and wp-includes cannot be written to.
 3. Check NiranzWP > Troubleshoot if anything looks wrong.
 
 == Changelog ==
+
+= 5.3.7 =
+* The Plugins screen showed a changelog that ended at 1.0.0, because it was a
+  block of HTML in the code rather than the list in readme.txt. It is read from
+  readme.txt now, so there is one place to keep it.
+* Connections shows the expiry as a date rather than "in 4 weeks", and in the
+  site's timezone rather than UTC.
+
+= 5.3.6 =
+* Connections: renamed the section to Connected apps.
+* Fixed: "View details" appeared twice on the Plugins screen. WordPress adds
+  that link itself once an update is pending, and this plugin was adding its
+  own beside it.
+
+= 5.3.3 =
+* Fixed: the update check had never worked. It fetched a URL that answers every
+  unknown path with a web page, read that as "no update available", and a
+  broken check is indistinguishable from an up-to-date site. It now reads the
+  manifest from the newest GitHub release.
+
+= 5.3.2 =
+* The connect screen could be drawn inside another site's page, where an
+  administrator could be led into approving a connection they never asked for.
+  A nonce does not prevent that - it is a real request from a real user - so
+  every screen now refuses to be framed.
+* Switching abilities off left issued tokens working. A bearer token makes the
+  request an administrator, so posts, users, media and plugins all answered to
+  it. The switch now holds in authentication, which also brings tokens under
+  the domain lock.
+* Refresh rotation destroyed the old token before the new pair was delivered,
+  so a lost response ended the connection permanently. A spent token now
+  answers an honest retry for two minutes; after that it is treated as theft
+  and revokes every token from the same approval.
+* The device code is no longer stored in plaintext alongside the user code.
+* The endpoints that must be open to strangers are rate-limited per address,
+  and registration can no longer evict a working client to make room.
+* No credential is issued over plain HTTP.
+
+= 5.3.0 =
+* An OAuth 2.0 device-grant server, so a terminal connects by having someone
+  approve a code in wp-admin rather than by being handed a password.
+* create-upload-link: one request for a file of any size, checked against a
+  declared hash and parsed before it is put in place.
+* Deleting the plugin now asks, at the click on Deactivate, whether the site
+  brief, design notes, skills and checkpoints should go with it. They are kept
+  by default.
+* The file abilities gained paging, recursion, globbing, edit, and disable or
+  enable without deleting.
+* Fixed: three ways block-write could return success while writing markup the
+  editor would not survive.
 
 = 1.1.0 =
 * Design: read the theme's palette, and check built HTML/CSS against it and
