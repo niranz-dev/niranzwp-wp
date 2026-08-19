@@ -405,9 +405,18 @@ final class Admin {
    tracks of a ragged last row (4 items in a 3-column layout), and this one
    leaves them white. Edge cells' shadows are clipped by overflow:hidden, so
    the outer frame stays exactly 1px. */
+/* A violet hairline along the top edge ties the strip to the masthead
+   without tinting the surface people read numbers off. Drawn as a background
+   layer rather than a border-top so the 1px cell shadows below still meet the
+   frame cleanly. */
 .nzwp-grid{
 	display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
-	gap:1px;background:#fff;
+	gap:1px;
+	background-color:#fff;
+	background-image:linear-gradient(90deg,#5b21b6,#7c3aed);
+	background-repeat:no-repeat;
+	background-size:100% 2px;
+	background-position:left top;
 	border:1px solid #dcdcde;border-radius:6px;overflow:hidden;
 	margin:18px 0 4px;
 }
@@ -422,8 +431,12 @@ final class Admin {
    third node someone adds later keeps order 0 and lands at the top instead
    of being silently flipped to the bottom. Screen-reader order is unchanged
    ("92, abilities registered"), which is the natural one. */
+/* #5b21b6 on white is 8.9:1, so the label can carry the colour at 11px
+   without dropping below the small-text floor. The figure stays ink: colour
+   on the label says which column, colour on the number would say something
+   about its value. */
 .nzwp-stat span{
-	order:1;color:#50575e;font-size:11px;font-weight:600;line-height:1.4;
+	order:1;color:#5b21b6;font-size:11px;font-weight:600;line-height:1.4;
 	letter-spacing:.06em;text-transform:uppercase;
 }
 .nzwp-stat b{
@@ -460,7 +473,16 @@ final class Admin {
 	   too narrow but because they were too tall for what they hold - widening
 	   them would have added more of the same space, not less. */
 	display:block;padding:13px 15px;text-decoration:none;
-	background:#fff;color:#1d2327;
+	color:#1d2327;
+	/* The same violet hairline the figure strip below carries, so the two rows
+	   read as one page rather than two widgets. Drawn as a background layer:
+	   a border-top cannot hold a gradient, and the markup has no spare
+	   element. Sized to sit inside the radius rather than square across it. */
+	background-color:#fff;
+	background-image:linear-gradient(90deg,#5b21b6,#7c3aed);
+	background-repeat:no-repeat;
+	background-size:100% 2px;
+	background-position:left top;
 	border:1px solid #dcdcde;border-radius:8px;
 	/* One pixel of lift, matching wp-admin's own postbox. Any more and the
 	   tile starts competing with the number it holds. */
@@ -471,7 +493,11 @@ final class Admin {
    would be the colour scheme's, and a 1px translate needs a reduced-motion
    escape hatch to buy nothing. The guard tile is a div, not a link: nothing
    on it may imply a click. */
-.nzwp-wrap .nzwp-dash a:hover{border-color:#8c8f94;box-shadow:0 2px 5px rgba(0,0,0,.07)}
+.nzwp-wrap .nzwp-dash a:hover{
+	border-color:#c4b5fd;
+	background-image:linear-gradient(90deg,#4c1d95,#6d28d9);
+	box-shadow:0 2px 6px rgba(76,29,149,.12);
+}
 .nzwp-wrap .nzwp-dash div.tile{cursor:default}
 .nzwp-wrap .nzwp-dash b{
 	display:block;font-size:25px;font-weight:600;line-height:1.1;
@@ -548,10 +574,22 @@ final class Admin {
    especially — collapses to a single line. The Copy button reads
    .innerText, which is layout-aware, so it has been copying that collapsed
    line too. This fixes what people paste, not just what they see. */
+/* Dressed as a terminal window, because that is what it is: every block on
+   this page is something you paste into a shell. The chrome is drawn with
+   pseudo-elements, since the markup is a bare div and cannot gain a title bar
+   of its own.
+   ::before is the bar; ::after is the left traffic light, with the other two
+   hung off it as box-shadows so three dots cost one element. Both are pinned
+   to the block rather than scrolling with it, so they stay put when a long
+   command scrolls sideways. */
 .nzwp-code{
-	background:#1d2327;color:#f0f0f1;
+	position:relative;
+	background:#1e2227;color:#e6e8ea;
 	white-space:pre;overflow:auto;
-	padding:15px 17px;border-radius:5px;margin:12px 0 6px;
+	/* 38px of the top padding is the title bar the ::before paints over. */
+	padding:52px 17px 16px;border-radius:8px;margin:12px 0 6px;
+	border:1px solid #0d0f11;
+	box-shadow:0 1px 2px rgba(0,0,0,.16),0 6px 18px rgba(0,0,0,.10);
 	font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
 	font-size:12.5px;line-height:1.75;
 	/* -> and != must stay two glyphs in a command someone may retype. */
@@ -561,19 +599,39 @@ final class Admin {
 	direction:ltr;text-align:left;
 }
 .nzwp-code::selection,.nzwp-code ::selection{background:#3858e9;color:#fff}
+/* The title bar. position:sticky rather than absolute so it stays across the
+   full scroll width of a long line instead of ending at the visible edge. */
+.nzwp-code::before{
+	content:"";
+	position:sticky;left:0;
+	display:block;
+	margin:-52px -17px 14px;
+	height:38px;
+	background:linear-gradient(180deg,#2b3138,#252a30);
+	border-bottom:1px solid #0d0f11;
+	border-radius:7px 7px 0 0;
+}
+/* One dot, and two more hung off it. Sizes and colours are the ones macOS
+   actually uses, which is the entire point of the reference. */
+.nzwp-code::after{
+	content:"";
+	position:absolute;top:14px;left:16px;
+	width:11px;height:11px;border-radius:50%;
+	background:#ff5f57;
+	box-shadow:19px 0 0 #febc2e,38px 0 0 #28c840;
+}
 /* Load-bearing: .nzwp-copy is absolutely positioned against this wrapper.
    Remove it and the button escapes to the initial containing block. */
 .nzwp-copywrap{position:relative}
 /* The shelf the button stands on, scoped to blocks that actually have a
    button — Abilities Hub prints a .nzwp-code with no Copy, and giving that
    one an 84px dead gutter would be a bug of its own. */
-.nzwp-copywrap .nzwp-code{padding-right:88px}
+.nzwp-copywrap .nzwp-code{padding-right:17px}
 .nzwp-copy{
-	position:absolute;top:9px;right:9px;
+	position:absolute;top:8px;right:10px;z-index:1;
 	-webkit-appearance:none;appearance:none;
-	/* Opaque, never translucent: it sits over the first line of the block,
-	   and code showing through a button is unreadable. */
-	background:#2c3338;color:#dcdcde;border:1px solid rgba(255,255,255,.18);
+	/* Opaque, never translucent: code showing through a button is unreadable. */
+	background:#39404a;color:#dcdcde;border:1px solid rgba(255,255,255,.14);
 	border-radius:3px;padding:5px 10px;
 	font-family:inherit;font-size:11px;font-weight:600;letter-spacing:.05em;
 	text-transform:uppercase;line-height:1.5;cursor:pointer;
@@ -595,13 +653,23 @@ final class Admin {
 	transition:background-color .12s ease,border-color .12s ease,color .12s ease;
 }
 .nzwp-tab:hover{border-color:#8c8f94;color:#1d2327}
-/* Selection is ink, not admin blue. Blue is the user's colour scheme and
-   changes under us; ink is 15.9:1 in every scheme and never becomes the
-   fourth hue on a page that already carries navy, green and red. Listed
-   after :hover at equal specificity so the selected chip keeps its fill
-   while the pointer is over it. */
-.nzwp-tab[aria-selected="true"]{background:#1d2327;border-color:#1d2327;color:#fff;font-weight:600}
-.nzwp-tab[aria-selected="true"]:hover{background:#101517;border-color:#101517;color:#fff}
+/* Selection carries the masthead violet, not admin blue. Blue is the user's
+   colour scheme and changes under us; this is the plugin's own and is already
+   at the top of every page, so the selected chip reads as belonging to it.
+   #5b21b6 under white 12.5px is 8.9:1. Listed after :hover at equal
+   specificity so the selected chip keeps its fill while the pointer is over
+   it. */
+.nzwp-tab[aria-selected="true"]{
+	background-color:#5b21b6;
+	background-image:linear-gradient(180deg,#6d28d9,#5b21b6);
+	border-color:#4c1d95;color:#fff;font-weight:600;
+	box-shadow:inset 0 1px 0 rgba(255,255,255,.16);
+}
+.nzwp-tab[aria-selected="true"]:hover{
+	background-color:#4c1d95;
+	background-image:linear-gradient(180deg,#5b21b6,#4c1d95);
+	border-color:#3b1580;color:#fff;
+}
 /* Load-bearing: the tab script toggles .is-on. Without these two rules
    every client pane renders at once. */
 .nzwp-pane{display:none}
