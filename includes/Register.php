@@ -63,7 +63,17 @@ function close_schema( array $schema ): array {
 		$schema['properties'] = (array) $schema['properties'];
 	}
 
-	if ( $is_object && ! array_key_exists( 'additionalProperties', $schema ) ) {
+	/*
+	 * Close it only when it says what it holds. A schema that declares no
+	 * properties at all is a free-form map -- a block's attributes, a
+	 * hex => name palette -- and sealing that refuses every key rather than
+	 * the unknown ones, which is how block-write stopped being able to set a
+	 * single attribute. An ability that means "no input" says so by declaring
+	 * an empty properties map, and that still closes.
+	 */
+	if ( $is_object
+		&& array_key_exists( 'properties', $schema )
+		&& ! array_key_exists( 'additionalProperties', $schema ) ) {
 		$schema['additionalProperties'] = false;
 	}
 

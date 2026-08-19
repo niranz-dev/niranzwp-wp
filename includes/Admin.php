@@ -61,7 +61,7 @@ final class Admin {
 
 		$bar->add_node( [
 			'id'    => 'niranzwp-on',
-			'title' => '<span style="background:#b32d2e;color:#fff;padding:0 8px;border-radius:3px;font-weight:600">NiranzWP ON</span>',
+			'title' => '<span style="background:#c62828;color:#fff;padding:2px 8px;border-radius:3px;font-size:12px;font-weight:700;line-height:1.4;letter-spacing:0">NiranzWP ON</span>',
 			'href'  => admin_url( 'admin.php?page=' . self::SLUG ),
 			'meta'  => [ 'title' => __( 'NiranzWP has write access to this site', 'niranzwp' ) ],
 		] );
@@ -180,6 +180,13 @@ final class Admin {
 			.nzwp-bar{background:#12326b;margin:0 0 0 -20px;padding:0 20px;box-shadow:inset 0 -1px 0 rgba(255,255,255,.12)}
 			.nzwp-bar-in{display:flex;align-items:center;justify-content:space-between;gap:16px;height:64px;max-width:940px}
 			.nzwp-mark{color:#fff;font-weight:800;font-size:19px;letter-spacing:.14em;line-height:1}
+			/* Grouped with the wordmark so the bar still has two children and
+			   space-between keeps the name left and the state right. Reads as
+			   part of the name rather than as another status field. */
+			.nzwp-bar-name{display:flex;align-items:center;gap:12px;min-width:0}
+			.nzwp-by{color:rgba(255,255,255,.55);font-size:12px;text-decoration:none;line-height:1;border-left:1px solid rgba(255,255,255,.22);padding-left:12px;margin-left:2px}
+			.nzwp-by:hover,.nzwp-by:focus{color:rgba(255,255,255,.9)}
+			@media(max-width:600px){.nzwp-by{display:none}}
 			.nzwp-bar-meta{display:flex;align-items:center;gap:12px}
 			.nzwp-ver{color:rgba(255,255,255,.62);font-size:12px;font-variant-numeric:tabular-nums}
 			.nzwp-bar .nzwp-on{background:#0e7a53;color:#fff}
@@ -228,7 +235,12 @@ final class Admin {
 		?>
 		<div class="nzwp-bar">
 			<div class="nzwp-bar-in">
-				<span class="nzwp-mark">NIRANZWP</span>
+				<span class="nzwp-bar-name">
+					<span class="nzwp-mark">NIRANZWP</span>
+					<a class="nzwp-by" href="https://niranz.dev" target="_blank" rel="noopener noreferrer">
+						<?php esc_html_e( 'Developed by Niranjan', 'niranzwp' ); ?>
+					</a>
+				</span>
 				<span class="nzwp-bar-meta">
 					<span class="nzwp-badge <?php echo Settings::active() ? 'nzwp-on' : 'nzwp-off'; ?>">
 						<?php echo Settings::active() ? esc_html__( 'Abilities on', 'niranzwp' ) : esc_html__( 'Abilities off', 'niranzwp' ); ?>

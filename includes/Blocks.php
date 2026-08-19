@@ -89,13 +89,27 @@ final class Blocks {
 							'type'       => 'object',
 							'properties' => [
 								'name'       => [ 'type' => 'string' ],
-								'attributes' => [ 'type' => 'object' ],
+								// Free-form by nature: every block type declares its own.
+								'attributes' => [ 'type' => 'object', 'additionalProperties' => true ],
 								'innerHTML'  => [ 'type' => 'string' ],
+								// Strings are wrapper markup, nulls are slots for
+								// inner blocks, one per child in order. Left
+								// untyped because the array is genuinely mixed.
+								'innerContent' => [ 'type' => 'array' ],
 								'innerBlocks'=> [ 'type' => 'array' ],
+								'allow_void' => [
+									'type'        => 'boolean',
+									'description' => 'Permit a block with no markup and no children. Only correct for a dynamic block that renders itself.',
+									'default'     => false,
+								],
 							],
 						],
 					],
 					'mode'    => [ 'type' => 'string', 'enum' => [ 'replace', 'append', 'prepend' ], 'default' => 'append' ],
+				'expected_sha256' => [
+					'type'        => 'string',
+					'description' => 'sha256 of post_content as block-read returned it. The write is refused if the post has changed since, so two edits cannot silently overwrite each other.',
+				],
 					'dry_run' => [ 'type' => 'boolean', 'default' => true ],
 				],
 				'required'   => [ 'id', 'blocks' ],
@@ -234,6 +248,10 @@ final class Blocks {
 			'status'       => $post->post_status,
 			'uses_blocks'  => has_blocks( $post ),
 			'block_count'  => count( $parsed ),
+			// Hand back what the body hashed to, so an edit built on this read
+			// can prove nothing moved underneath it. block-write takes the
+			// same value as expected_sha256.
+			'sha256'       => hash( 'sha256', (string) $post->post_content ),
 			'blocks'       => array_map( static fn( array $b ): array => self::summarize( $b, $depth ), $parsed ),
 		];
 	}
@@ -270,6 +288,84 @@ final class Blocks {
 			}
 
 			$inner = (array) ( $b['innerBlocks'] ?? [] );
+			$html  = (string) ( $b['innerHTML'] ?? '' );
+			$ic    = array_key_exists( 'innerContent', $b ) && is_array( $b['innerContent'] )
+				? array_values( $b['innerContent'] )
+				: null;
+
+			$has_markup = '' !== trim( $html )
+				|| ( null !== $ic && array_filter( $ic, static fn( $x ) => is_string( $x ) && '' !== trim( $x ) ) );
+
+			/*
+			 * V1 - a sourced attribute lives in the saved markup, never in the
+			 * block comment. Write one with no markup and the value goes into
+			 * the JSON, where parse_blocks() will not look for it, and the
+			 * block comes back empty. core/image's url and alt, core/paragraph
+			 * and core/heading's content are all sourced this way.
+			 *
+			 * is_dynamic() is the wrong test here: core/image registers a
+			 * render callback, so a dynamic check waves the worst case
+			 * straight through.
+			 */
+			$sourced = [];
+			foreach ( (array) ( $b['attributes'] ?? [] ) as $key => $_ ) {
+				if ( isset( $type->attributes[ $key ]['source'] ) ) {
+					$sourced[] = $key;
+				}
+			}
+			if ( $sourced && ! $has_markup ) {
+				$problems[] = sprintf(
+					'%s: "%s" reads %s out of the saved markup, not the block comment. With no innerHTML those values are written into the comment and lost on parse.',
+					$at,
+					$name,
+					implode( ', ', $sourced )
+				);
+			}
+
+			// V2 - nothing to render and nothing nested. Deliberate for a few
+			// dynamic blocks, a mistake everywhere else, so it needs saying.
+			if ( ! $has_markup && ! $inner && empty( $b['allow_void'] ) ) {
+				$problems[] = sprintf(
+					'%s: "%s" would be written with no markup and no inner blocks, which renders as nothing. Pass innerHTML, or allow_void true if that is intended.',
+					$at,
+					$name
+				);
+			}
+
+			/*
+			 * V3 - innerContent is how serialize_block() interleaves wrapper
+			 * markup with children: strings are literal, each null is the slot
+			 * for the next child. Supplying innerHTML alone alongside children
+			 * is the shape that silently drops every one of them.
+			 */
+			if ( $inner ) {
+				if ( null === $ic ) {
+					if ( '' !== trim( $html ) ) {
+						$problems[] = sprintf(
+							'%s: "%s" has innerHTML and %d inner block(s) but no innerContent. innerHTML alone drops every child. Supply innerContent as the wrapper split around one null per child, e.g. ["<div>", null, "</div>"].',
+							$at,
+							$name,
+							count( $inner )
+						);
+					}
+				} else {
+					$slots = count( array_filter( $ic, 'is_null' ) );
+					if ( $slots !== count( $inner ) ) {
+						$problems[] = sprintf(
+							'%s: innerContent has %d null slot(s) but there are %d inner block(s). They must match, in order.',
+							$at,
+							$slots,
+							count( $inner )
+						);
+					}
+				}
+			} elseif ( null !== $ic && array_filter( $ic, 'is_null' ) ) {
+				$problems[] = sprintf(
+					'%s: innerContent has null slots but there are no inner blocks to fill them.',
+					$at
+				);
+			}
+
 			if ( $inner ) {
 				// A block that declares parents may only appear inside them.
 				foreach ( $inner as $j => $child ) {
@@ -292,12 +388,27 @@ final class Blocks {
 			static function ( array $b ): array {
 				$inner = self::to_wp( (array) ( $b['innerBlocks'] ?? [] ) );
 				$html  = (string) ( $b['innerHTML'] ?? '' );
+
+				// An explicit innerContent wins: it is the only way to say
+				// where the children sit inside the wrapper. Otherwise fall
+				// back to the two unambiguous shapes - all children, or all
+				// markup.
+				$ic = array_key_exists( 'innerContent', $b ) && is_array( $b['innerContent'] )
+					? array_values( $b['innerContent'] )
+					: ( $inner ? array_fill( 0, count( $inner ), null ) : [ $html ] );
+
+				// serialize_block() ignores innerHTML, but parse_blocks() will
+				// rebuild it from innerContent, so keep the two agreeing.
+				if ( '' === $html ) {
+					$html = implode( '', array_filter( $ic, 'is_string' ) );
+				}
+
 				return [
 					'blockName'    => $b['name'],
 					'attrs'        => (array) ( $b['attributes'] ?? [] ),
 					'innerBlocks'  => $inner,
 					'innerHTML'    => $html,
-					'innerContent' => '' === $html && $inner ? array_fill( 0, count( $inner ), null ) : [ $html ],
+					'innerContent' => $ic,
 				];
 			},
 			$blocks
@@ -356,6 +467,29 @@ final class Blocks {
 			$result['status'] = 'would_write';
 			$result['note']   = 'Nothing was written. Pass dry_run false to apply.';
 			return $result;
+		}
+
+		/*
+		 * A post read, edited and written back is a read-modify-write, and
+		 * nothing here was checking that the post still says what it said when
+		 * it was read. Two edits in flight meant the second one silently threw
+		 * away the first. Optional, because a caller writing fresh content has
+		 * nothing to compare against - but block-read returns the hash, so
+		 * anything that edits in place can pass it.
+		 */
+		$expect = strtolower( trim( (string) ( $input['expected_sha256'] ?? '' ) ) );
+		if ( '' !== $expect ) {
+			if ( ! preg_match( '/^[0-9a-f]{64}$/', $expect ) ) {
+				return new \WP_Error( 'niranzwp_bad_sha', 'expected_sha256 must be 64 hexadecimal characters.', [ 'status' => 400 ] );
+			}
+			$actual = hash( 'sha256', (string) $post->post_content );
+			if ( ! hash_equals( $expect, $actual ) ) {
+				return new \WP_Error(
+					'niranzwp_content_changed',
+					sprintf( 'Post %d has changed since it was read. Nothing was written. Read it again and retry.', $id ),
+					[ 'status' => 409 ]
+				);
+			}
 		}
 
 		// Snapshot the post before its body is replaced, so the edit is undoable.

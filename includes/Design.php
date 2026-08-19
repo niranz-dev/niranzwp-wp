@@ -351,7 +351,7 @@ final class Design {
 					'notes'  => [ 'type' => 'string' ],
 					'dos'    => [ 'type' => 'array', 'items' => [ 'type' => 'string' ] ],
 					'donts'  => [ 'type' => 'array', 'items' => [ 'type' => 'string' ] ],
-					'colors' => [ 'type' => 'object', 'description' => 'hex => name. Classic themes only.' ],
+					'colors' => [ 'type' => 'object', 'additionalProperties' => true, 'description' => 'hex => name. Classic themes only.' ],
 					'fonts'  => [ 'type' => 'array', 'items' => [ 'type' => 'string' ] ],
 				],
 			],
