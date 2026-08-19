@@ -80,29 +80,41 @@ final class Admin {
 					inset 0 1px 0 rgba(255,255,255,.28),
 					0 1px 3px rgba(0,0,0,.35),
 					0 0 14px rgba(224,58,53,.55);
-				transition:box-shadow .18s ease, transform .18s ease;
-				/* A slow breathe rather than a blink. This is a standing state,
-				   not an alert -- it should catch the eye once and then stay
-				   out of the way. */
-				animation:nzwp-breathe 2.8s ease-in-out infinite;
+				transition:box-shadow .18s ease;
+				/* The gloss below is absolutely placed, and clipped to the pill
+				   so it sweeps the shape rather than past it. */
+				position:relative;
+				overflow:hidden;
+				isolation:isolate;
 			}
-			@keyframes nzwp-breathe{
-				0%,100%{box-shadow:
-					inset 0 1px 0 rgba(255,255,255,.28),
-					0 1px 3px rgba(0,0,0,.35),
-					0 0 10px rgba(224,58,53,.40);}
-				50%{box-shadow:
-					inset 0 1px 0 rgba(255,255,255,.32),
-					0 1px 3px rgba(0,0,0,.35),
-					0 0 20px rgba(224,58,53,.80);}
+			/* A blurred white gloss that springs left to right on hover and
+			   settles. Nothing moves until pointed at, which is the difference
+			   between this and a badge that keeps asking for attention. */
+			#wpadminbar .nzwp-pill::before{
+				content:"";
+				position:absolute;
+				top:-14px;
+				bottom:-14px;
+				left:0;
+				width:18px;
+				z-index:2;
+				pointer-events:none;
+				background:#fff;
+				filter:blur(8px);
+				opacity:0;
+				transform:translateX(-14px) rotate(20deg);
+				transition:transform .65s cubic-bezier(.2,.7,.25,1),
+				           opacity .65s cubic-bezier(.2,.7,.25,1);
 			}
-			/* Anything that animates forever has to be switchable off, and the
-			   browser already knows the answer. */
+			#wpadminbar .nzwp-pill:hover::before{
+				opacity:.28;
+				transform:translateX(150px) rotate(20deg);
+			}
 			@media (prefers-reduced-motion: reduce){
-				#wpadminbar .nzwp-pill{animation:none}
+				#wpadminbar .nzwp-pill::before{transition-duration:.01ms}
+				#wpadminbar .nzwp-pill:hover::before{opacity:.18}
 			}
 			#wpadminbar .nzwp-pill:hover{
-				animation:none;
 				box-shadow:
 					inset 0 1px 0 rgba(255,255,255,.34),
 					0 1px 3px rgba(0,0,0,.4),

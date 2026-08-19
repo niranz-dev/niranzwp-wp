@@ -47,7 +47,25 @@ final class Connections {
 		exit;
 	}
 
+	/**
+	 * Revoking cuts off whatever is using that connection, immediately. A
+	 * button that looks like every other button says nothing about that, so
+	 * this one is red. Core has no destructive button style -- only
+	 * .button-link-delete, which is a text link.
+	 */
+	private static function styles(): void {
+		?>
+		<style>
+			.nzwp-danger{color:#b32d2e!important;border-color:#b32d2e!important}
+			.nzwp-danger:hover,.nzwp-danger:focus{
+				background:#b32d2e!important;color:#fff!important;border-color:#b32d2e!important
+			}
+		</style>
+		<?php
+	}
+
 	public static function render(): void {
+		self::styles();
 		Admin::header( __( 'Connections', 'niranzwp' ) );
 
 		if ( isset( $_GET['revoked'] ) ) {
@@ -85,7 +103,7 @@ final class Connections {
 
 			printf(
 				'<tr><td><strong>%s</strong></td><td>%s</td><td>%s</td><td>%s</td>'
-				. '<td><a href="%s" class="button button-small" onclick="return confirm(%s)">%s</a></td></tr>',
+				. '<td><a href="%s" class="button button-small nzwp-danger" onclick="return confirm(%s)">%s</a></td></tr>',
 				esc_html( (string) ( $item['name'] ?? '(unnamed)' ) ),
 				esc_html( ! empty( $item['created'] ) ? gmdate( 'j M Y', (int) $item['created'] ) : '-' ),
 				esc_html( $used ),
