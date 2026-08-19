@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       NiranzWP
  * Plugin URI:        https://niranz.dev
- * Description:       Exposes safe, purpose-built abilities so CLIs and AI agents can work with this site through the WordPress Abilities API.
+ * Description:       Connect Claude, Cursor, Codex or any MCP client to this site. Fifty-one abilities across SEO, content, blocks, the database and the filesystem - every write previews before it runs, is snapshotted first, and is put back automatically if it takes the site down.
  * Version:           5.2.6
  * Requires at least: 6.9
  * Requires PHP:      8.0
