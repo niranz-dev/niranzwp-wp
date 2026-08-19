@@ -117,7 +117,7 @@ final class Connections {
 
 		if ( $grants ) {
 			echo '<div class="nzwp-card">';
-			echo '<h2 style="margin:0 0 4px;font-size:15px">' . esc_html__( 'Approved tools', 'niranzwp' ) . '</h2>';
+			echo '<h2 style="margin:0 0 4px;font-size:15px">' . esc_html__( 'Connected apps', 'niranzwp' ) . '</h2>';
 			echo '<p class="nzwp-desc">' . esc_html__( 'Connected by approving a code. Each holds a token that renews itself; revoking ends it immediately and the tool has to be approved again.', 'niranzwp' ) . '</p>';
 
 			echo '<table class="widefat striped" style="margin-top:12px"><thead><tr>';
