@@ -17,11 +17,18 @@ final class Admin {
 	private const NONCE = 'niranzwp_save';
 	private const TOGGLE_NONCE = 'niranzwp_toggle';
 
+	/** Set when the toolbar badge is added, read when its styles are printed. */
+	private static bool $badge_rendered = false;
+
 	public static function init(): void {
 		add_action( 'admin_menu', [ self::class, 'menu' ] );
 		add_action( 'admin_post_niranzwp_save', [ self::class, 'handle_save' ] );
 		add_action( 'admin_post_niranzwp_toggle', [ self::class, 'handle_toggle' ] );
 		add_action( 'admin_bar_menu', [ self::class, 'admin_bar' ], 100 );
+		// The badge shows on every screen the toolbar does, front end included,
+		// so its styles cannot live in the plugin pages' inline block.
+		add_action( 'admin_head', [ self::class, 'bar_styles' ] );
+		add_action( 'wp_head', [ self::class, 'bar_styles' ] );
 	}
 
 	public static function menu(): void {
@@ -33,6 +40,58 @@ final class Admin {
 		add_submenu_page( self::SLUG, __( 'Skills', 'niranzwp' ), __( 'Skills', 'niranzwp' ), CAPABILITY, self::SLUG . '-skills', [ SkillsAdmin::class, 'render' ] );
 		add_submenu_page( self::SLUG, __( 'Checkpoints', 'niranzwp' ), __( 'Checkpoints', 'niranzwp' ), CAPABILITY, self::SLUG . '-checkpoints', [ CheckpointAdmin::class, 'render' ] );
 		add_submenu_page( self::SLUG, __( 'Troubleshoot', 'niranzwp' ), __( 'Troubleshoot', 'niranzwp' ), CAPABILITY, self::SLUG . '-troubleshoot', [ self::class, 'render_troubleshoot' ] );
+	}
+
+	/**
+	 * Styles for the toolbar badge.
+	 *
+	 * Printed rather than enqueued because it is a dozen lines and the badge
+	 * appears on every screen the toolbar does. Inter is fetched only for
+	 * users who can see the badge, which is administrators, and only the two
+	 * weights it uses.
+	 */
+	public static function bar_styles(): void {
+		// admin_bar_menu runs on init, before either head hook, so the badge
+		// has already decided whether it exists. Asking it is exact, where
+		// is_admin_bar_showing() answers differently depending on the request
+		// type and would drop the styles on screens that do show the bar.
+		if ( ! self::$badge_rendered ) {
+			return;
+		}
+		?>
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&amp;display=swap">
+		<style>
+			#wpadminbar .nzwp-pill{
+				display:inline-block;
+				font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+				font-size:12px;
+				font-weight:500;
+				letter-spacing:.02em;
+				line-height:20px;
+				color:#fff;
+				padding:0 12px;
+				border-radius:999px;
+				background:linear-gradient(180deg,#e03a35 0%,#c62828 100%);
+				/* A thin light edge reads as a raised surface, then two shadows:
+				   a tight one for the lift and a wide soft one for the glow. */
+				box-shadow:
+					inset 0 1px 0 rgba(255,255,255,.28),
+					0 1px 3px rgba(0,0,0,.35),
+					0 0 14px rgba(224,58,53,.55);
+				transition:box-shadow .18s ease, transform .18s ease;
+			}
+			#wpadminbar .nzwp-pill:hover{
+				box-shadow:
+					inset 0 1px 0 rgba(255,255,255,.34),
+					0 1px 3px rgba(0,0,0,.4),
+					0 0 22px rgba(224,58,53,.85);
+			}
+			/* The toolbar sets its own line-height on links; without this the
+			   pill sits low against the 32px bar. */
+			#wpadminbar #wp-admin-bar-niranzwp-on > .ab-item{display:flex;align-items:center}
+		</style>
+		<?php
 	}
 
 	/**
@@ -59,9 +118,11 @@ final class Admin {
 		$runtime  = is_array( $settings ) && ! empty( $settings['runtime'] );
 		$guard    = Recovery::installed();
 
+		self::$badge_rendered = true;
+
 		$bar->add_node( [
 			'id'    => 'niranzwp-on',
-			'title' => '<span style="background:#c62828;color:#fff;padding:2px 8px;border-radius:3px;font-size:12px;font-weight:700;line-height:1.4;letter-spacing:0">NiranzWP ON</span>',
+			'title' => '<span class="nzwp-pill">NiranzWP ON</span>',
 			'href'  => admin_url( 'admin.php?page=' . self::SLUG ),
 			'meta'  => [ 'title' => __( 'NiranzWP has write access to this site', 'niranzwp' ) ],
 		] );
