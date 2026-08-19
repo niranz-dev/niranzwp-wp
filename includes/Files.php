@@ -175,6 +175,42 @@ final class Files {
 			'meta'                => $rw,
 		] );
 
+		register_ability( 'niranzwp/disable-file', [
+			'label'               => __( 'Disable file', 'niranzwp' ),
+			'description'         => __( 'Renames a file to <name>.disabled so nothing loads it, without deleting it. Works anywhere inside the install, so a misbehaving mu-plugin, plugin or theme file can be switched off and switched back on. Previews unless dry_run is false.', 'niranzwp' ),
+			'category'            => 'niranzwp-filesystem',
+			'input_schema'        => [
+				'type'       => 'object',
+				'properties' => [
+					'path'    => [ 'type' => 'string' ],
+					'dry_run' => [ 'type' => 'boolean', 'default' => true ],
+				],
+				'required'   => [ 'path' ],
+			],
+			'output_schema'       => [ 'type' => 'object' ],
+			'permission_callback' => $gate,
+			'execute_callback'    => [ self::class, 'disable' ],
+			'meta'                => $rw,
+		] );
+
+		register_ability( 'niranzwp/enable-file', [
+			'label'               => __( 'Enable file', 'niranzwp' ),
+			'description'         => __( 'Removes the .disabled suffix so the file loads again. Give either path, with or without the suffix. Idempotent: enabling a file that is already enabled reports so rather than failing.', 'niranzwp' ),
+			'category'            => 'niranzwp-filesystem',
+			'input_schema'        => [
+				'type'       => 'object',
+				'properties' => [
+					'path'    => [ 'type' => 'string' ],
+					'dry_run' => [ 'type' => 'boolean', 'default' => true ],
+				],
+				'required'   => [ 'path' ],
+			],
+			'output_schema'       => [ 'type' => 'object' ],
+			'permission_callback' => $gate,
+			'execute_callback'    => [ self::class, 'enable' ],
+			'meta'                => $rw,
+		] );
+
 		register_ability( 'niranzwp/delete-file', [
 			'label'               => __( 'Delete file', 'niranzwp' ),
 			'description'         => __( 'Deletes a file, or a whole directory when recursive is set. Core directories and wp-config.php are refused, and a tree containing a symlink is refused rather than followed. Previews unless dry_run is false.', 'niranzwp' ),
@@ -647,6 +683,166 @@ final class Files {
 	private static function replace_once( string $haystack, string $needle, string $replacement ): string {
 		$at = strpos( $haystack, $needle );
 		return false === $at ? $haystack : substr_replace( $haystack, $replacement, $at, strlen( $needle ) );
+	}
+
+	private const DISABLED_SUFFIX = '.disabled';
+
+	/**
+	 * Switch a file off by renaming it, rather than deleting it.
+	 *
+	 * The recovery guard covers a file that takes the site down; it does
+	 * nothing for one that loads fine and behaves wrongly, which is the more
+	 * common case and the one that wants bisecting. Renaming is the oldest
+	 * answer to that and the only one that is instantly reversible.
+	 *
+	 * Deliberately not confined to a sandbox: the files worth switching off
+	 * are mu-plugins, plugins and theme files, which is exactly where a
+	 * sandbox-only version cannot reach.
+	 *
+	 * @return array<string,mixed>|\WP_Error
+	 */
+	public static function disable( mixed $input = [] ) {
+		$input = is_array( $input ) ? $input : [];
+		$dry   = ! isset( $input['dry_run'] ) || (bool) $input['dry_run'];
+
+		$path = self::resolve( (string) ( $input['path'] ?? '' ) );
+		if ( is_wp_error( $path ) ) {
+			return $path;
+		}
+
+		$rel = ltrim( self::rel( $path ), '/' );
+		foreach ( self::PROTECTED_DIRS as $dir ) {
+			if ( $rel === $dir || str_starts_with( $rel, $dir . '/' ) ) {
+				// 400 rather than 403: the path is the problem, not the caller.
+				// A 403 makes the CLI report insufficient_scope and send
+				// whoever hit it off checking credentials.
+				return new \WP_Error( 'niranzwp_protected', $dir . ' is a WordPress core directory and cannot be touched.', [ 'status' => 400 ] );
+			}
+		}
+		if ( is_dir( $path ) ) {
+			return new \WP_Error( 'niranzwp_is_dir', 'That path is a directory.', [ 'status' => 400 ] );
+		}
+		if ( str_ends_with( $path, self::DISABLED_SUFFIX ) ) {
+			return new \WP_Error( 'niranzwp_already_disabled', 'That file is already disabled.', [ 'status' => 409 ] );
+		}
+
+		$target = $path . self::DISABLED_SUFFIX;
+		if ( file_exists( $target ) ) {
+			return new \WP_Error(
+				'niranzwp_target_exists',
+				sprintf( '%s already exists. Remove or enable it first, so nothing is overwritten.', self::rel( $target ) ),
+				[ 'status' => 409 ]
+			);
+		}
+
+		$out = [
+			'path'     => '/' . $rel,
+			'disabled' => self::rel( $target ),
+			'bytes'    => (int) filesize( $path ),
+			'dry_run'  => $dry,
+		];
+
+		if ( $dry ) {
+			$out['status'] = 'would_disable';
+			$out['note']   = 'Nothing was renamed. Pass dry_run false to apply.';
+			return $out;
+		}
+
+		/*
+		 * If switching this off is what breaks the next request, the guard
+		 * puts the original back. The .disabled copy is left behind in that
+		 * case rather than cleaned up, because a guard that deletes files
+		 * while recovering is a worse idea than a stray file.
+		 */
+		Recovery::arm( $path, (string) file_get_contents( $path ) );
+
+		if ( ! rename( $path, $target ) ) {
+			Recovery::disarm();
+			return new \WP_Error( 'niranzwp_rename_failed', 'Could not rename the file. Check filesystem permissions.' );
+		}
+
+		if ( function_exists( 'opcache_invalidate' ) ) {
+			@opcache_invalidate( $path, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+		}
+
+		$out['status']  = 'disabled';
+		$out['guarded'] = Recovery::installed();
+		$out['note']    = 'Reverse it with enable-file on the same path.';
+		return $out;
+	}
+
+	/**
+	 * Put a disabled file back.
+	 *
+	 * Takes the path either way round, because whoever disabled it knows the
+	 * original name and whoever found it later knows the suffixed one.
+	 *
+	 * @return array<string,mixed>|\WP_Error
+	 */
+	public static function enable( mixed $input = [] ) {
+		$input = is_array( $input ) ? $input : [];
+		$dry   = ! isset( $input['dry_run'] ) || (bool) $input['dry_run'];
+		$given = (string) ( $input['path'] ?? '' );
+
+		$suffixed = str_ends_with( $given, self::DISABLED_SUFFIX ) ? $given : $given . self::DISABLED_SUFFIX;
+		$plain    = substr( $suffixed, 0, -strlen( self::DISABLED_SUFFIX ) );
+
+		$path = self::resolve( $suffixed, false );
+		if ( is_wp_error( $path ) ) {
+			return $path;
+		}
+
+		if ( ! file_exists( $path ) ) {
+			$already = self::resolve( $plain, false );
+			if ( ! is_wp_error( $already ) && file_exists( $already ) ) {
+				return [
+					'path'    => self::rel( $already ),
+					'status'  => 'already_enabled',
+					'dry_run' => $dry,
+					'note'    => 'Nothing to do - that file is not disabled.',
+				];
+			}
+			return new \WP_Error( 'niranzwp_not_found', 'No disabled file at ' . $suffixed, [ 'status' => 404 ] );
+		}
+
+		$target = substr( $path, 0, -strlen( self::DISABLED_SUFFIX ) );
+		if ( file_exists( $target ) ) {
+			return new \WP_Error(
+				'niranzwp_target_exists',
+				sprintf( '%s already exists, so enabling would overwrite it. Delete one of the two first.', self::rel( $target ) ),
+				[ 'status' => 409 ]
+			);
+		}
+
+		$out = [
+			'path'    => self::rel( $path ),
+			'enabled' => self::rel( $target ),
+			'bytes'   => (int) filesize( $path ),
+			'dry_run' => $dry,
+		];
+
+		if ( $dry ) {
+			$out['status'] = 'would_enable';
+			$out['note']   = 'Nothing was renamed. Pass dry_run false to apply.';
+			return $out;
+		}
+
+		// A file coming back could be the thing that fatals, so the same
+		// arrangement applies in reverse: null means "it was not there".
+		Recovery::arm( $target, null );
+
+		if ( ! rename( $path, $target ) ) {
+			Recovery::disarm();
+			return new \WP_Error( 'niranzwp_rename_failed', 'Could not rename the file. Check filesystem permissions.' );
+		}
+
+		if ( function_exists( 'opcache_invalidate' ) ) {
+			@opcache_invalidate( $target, true ); // phpcs:ignore WordPress.PHP.NoSilencedErrors
+		}
+
+		$out['status']  = 'enabled';
+		$out['guarded'] = Recovery::installed();
+		return $out;
 	}
 
 	/** @return array<string,mixed>|\WP_Error */
