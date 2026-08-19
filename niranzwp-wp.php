@@ -22,6 +22,10 @@ namespace NiranzWP;
 defined( 'ABSPATH' ) || exit;
 
 const VERSION     = '5.2.6';
+/* Placeholder until the repository is public. Whatever this points at is what
+   the masthead's GitHub mark opens, so it is one line to change and nothing
+   else references it. */
+const GITHUB_URL  = 'https://github.com/niranz-dev/niranzwp-wp';
 const OPTION_KEY  = 'niranzwp_settings';
 const CAPABILITY  = 'manage_options';
 

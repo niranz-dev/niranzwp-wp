@@ -354,6 +354,28 @@ final class Admin {
 	transition:color .12s ease;
 }
 .nzwp-by:hover,.nzwp-by:focus{color:#fff}
+/* Same divider treatment as the attribution, so the three items read as one
+   run of small print rather than three separate claims. */
+.nzwp-free{
+	flex:none;color:rgba(255,255,255,.68);font-size:12px;line-height:1;white-space:nowrap;
+	border-left:1px solid rgba(255,255,255,.24);padding-left:12px;
+}
+/* The mark is a link with no text, so it carries its label in aria-label and
+   title rather than relying on the icon to say what it is. */
+.nzwp-gh{
+	flex:none;width:17px;height:17px;
+	background-color:rgba(255,255,255,.72);
+	-webkit-mask-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/%3E%3C/svg%3E");
+	-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+	-webkit-mask-position:center;mask-position:center;
+	-webkit-mask-size:contain;mask-size:contain;
+	transition:background-color .12s ease;
+}
+.nzwp-gh:hover,.nzwp-gh:focus{background-color:#fff}
+@supports not ((-webkit-mask-image:none) or (mask-image:none)){.nzwp-gh{display:none}}
+/* The bar has a fixed height and the wordmark and state pill are the two
+   things that must survive any width, so the small print goes first. */
+@media(max-width:1100px){.nzwp-free{display:none}}
 /* flex:none so the state and version never compress; they are the two
    things in the bar that must stay readable at any width. */
 .nzwp-bar-meta{display:flex;align-items:center;gap:12px;flex:none}
@@ -824,6 +846,10 @@ final class Admin {
 					<a class="nzwp-by" href="https://niranz.dev" target="_blank" rel="noopener noreferrer">
 						<?php esc_html_e( 'Developed by Niranjan', 'niranzwp' ); ?>
 					</a>
+					<span class="nzwp-free"><?php esc_html_e( 'Open source, free forever', 'niranzwp' ); ?></span>
+					<a class="nzwp-gh" href="<?php echo esc_url( GITHUB_URL ); ?>" target="_blank" rel="noopener noreferrer"
+						aria-label="<?php esc_attr_e( 'NiranzWP on GitHub', 'niranzwp' ); ?>"
+						title="<?php esc_attr_e( 'NiranzWP on GitHub', 'niranzwp' ); ?>"></a>
 				</span>
 				<span class="nzwp-bar-meta">
 					<span class="nzwp-badge <?php echo Settings::active() ? 'nzwp-on' : 'nzwp-off'; ?>">
