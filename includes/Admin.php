@@ -273,61 +273,436 @@ final class Admin {
 	private static function styles(): void {
 		?>
 		<style>
-			/* The bar spans the content column, so it has to escape the
-			   padding WordPress puts on #wpbody-content. */
-			/* Deep violet into a lighter one, angled so the lift runs across the
-			   bar rather than straight down. The inner top line is the light
-			   catching the edge; the bottom one separates it from the grey
-			   admin background without needing a border. */
-			.nzwp-bar{
-				background:linear-gradient(115deg,#2e1065 0%,#5b21b6 48%,#7c3aed 100%);
-				margin:0 0 0 -20px;
-				padding:0 20px;
-				box-shadow:
-					inset 0 1px 0 rgba(255,255,255,.14),
-					inset 0 -1px 0 rgba(0,0,0,.22);
-			}
-			.nzwp-bar-in{display:flex;align-items:center;justify-content:space-between;gap:16px;height:64px;max-width:940px}
-			.nzwp-mark{color:#fff;font-weight:800;font-size:19px;letter-spacing:.14em;line-height:1}
-			/* Grouped with the wordmark so the bar still has two children and
-			   space-between keeps the name left and the state right. Reads as
-			   part of the name rather than as another status field. */
-			.nzwp-bar-name{display:flex;align-items:center;gap:12px;min-width:0}
-			.nzwp-by{color:rgba(255,255,255,.66);font-size:12px;text-decoration:none;line-height:1;border-left:1px solid rgba(255,255,255,.22);padding-left:12px;margin-left:2px}
-			.nzwp-by:hover,.nzwp-by:focus{color:rgba(255,255,255,.9)}
-			@media(max-width:600px){.nzwp-by{display:none}}
-			.nzwp-bar-meta{display:flex;align-items:center;gap:12px}
-			.nzwp-ver{color:rgba(255,255,255,.72);font-size:12px;font-variant-numeric:tabular-nums}
-			.nzwp-bar .nzwp-on{background:#0e7a53;color:#fff}
-			.nzwp-bar .nzwp-off{background:rgba(255,255,255,.16);color:rgba(255,255,255,.85)}
-			@media(max-width:782px){.nzwp-bar{margin-left:-10px;padding:0 10px}.nzwp-bar-in{height:56px}}
+/* NiranzWP admin surface — printed from Admin::styles().
+   One inline style element. No build step, no external CSS, no JS for visuals.
 
-			.nzwp-wrap{max-width:900px;margin-top:22px}
-			.nzwp-head{display:flex;align-items:baseline;gap:12px;margin:0 0 4px}
-			.nzwp-head h1{margin:0;font-size:23px}
-			.nzwp-sub{color:#646970;margin:0 0 20px}
-			.nzwp-card{background:#fff;border:1px solid #dcdcde;border-radius:6px;padding:20px 24px;margin:0 0 16px}
-			.nzwp-card h2{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:15px}
-			.nzwp-num{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:#1d2327;color:#fff;font-size:12px;font-weight:600;flex:none}
-			.nzwp-badge{display:inline-block;padding:2px 9px;border-radius:11px;font-size:12px;font-weight:600;line-height:18px}
-			.nzwp-on{background:#d5f5e3;color:#0a5c36}
-			.nzwp-off{background:#f0f0f1;color:#646970}
-			.nzwp-warn{background:#fcf0e0;color:#8a5700}
-			.nzwp-code{background:#1d2327;color:#f0f0f1;padding:14px 16px;border-radius:5px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;line-height:1.7;margin:10px 0 6px}
-			.nzwp-desc{color:#646970;margin:4px 0 0;font-size:13px}
-			.nzwp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}
-			.nzwp-stat{border:1px solid #dcdcde;border-radius:5px;padding:12px 14px}
-			.nzwp-stat b{display:block;font-size:20px;line-height:1.3}
-			.nzwp-stat span{color:#646970;font-size:12px}
-			.nzwp-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 0}
-			.nzwp-tab{padding:5px 13px;border:1px solid #dcdcde;border-radius:14px;background:#fff;cursor:pointer;font-size:13px;line-height:1.5}
-			.nzwp-tab[aria-selected="true"]{background:#2271b1;border-color:#2271b1;color:#fff;font-weight:600}
-			.nzwp-pane{display:none}
-			.nzwp-pane.is-on{display:block}
-			.nzwp-copywrap{position:relative}
-			.nzwp-copy{position:absolute;top:8px;right:8px;background:#3c434a;color:#f0f0f1;border:0;border-radius:4px;padding:4px 10px;font-size:12px;cursor:pointer}
-			.nzwp-copy:hover{background:#50575e}
-			.nzwp-copy.done{background:#0a5c36}
+   THESIS. "Basic" here was a spacing-and-typography problem, not a
+   missing-gradient problem. The page is re-set as a well-typeset document:
+   small-caps labels over tabular figures, hairline rules, one 900px measure
+   that the masthead and every card align to. Gradient is then spent in
+   exactly three places where it does work — the masthead panel, the 2px
+   brand rule under it, and the "Abilities on" pill — and each of the three
+   was picked from its LIGHTEST stop backwards, so the top half of a fill is
+   as legible as the bottom.
+
+   TWO RULES THE WHOLE FILE OBEYS.
+   1. Every painted surface states background AND colour. Admin colour
+      schemes (Midnight, Ectoplasm, Coffee, third-party dark-mode plugins)
+      repaint what sits underneath us; a surface that sets only one of the
+      pair can end up with its own text invisible on someone else's ground.
+   2. No blue is borrowed for state. In wp-admin blue belongs to the user's
+      colour scheme and changes under us, so selection is ink and focus is
+      ink. Links stay blue, because they are links.
+
+   PALETTE. violet #2e1065 -> #7c3aed (masthead), navy #12326b (step markers) · brand red #ff2424→#e10000
+   (one 2px rule, nothing else) · green #0e7a53 / #0a5c36 ("on" right now) ·
+   amber #8a5700 ("this can write") · core greys #1d2327 / #50575e / #dcdcde.
+*/
+
+/* wp-admin does not guarantee border-box on plugin markup and every box
+   below is sized with padding. Scoped, so core markup is untouched. */
+.nzwp-bar,.nzwp-bar *,.nzwp-wrap,.nzwp-wrap *{box-sizing:border-box}
+
+/* ============================================================ masthead == */
+
+/* The bar spans the content column, so it escapes the padding WordPress
+   puts on #wpcontent: 20px on desktop, 10px at ≤782px (see the responsive
+   block). Those two numbers are WP's, not a guess — keep them paired.
+
+   Two background layers, one flourish. The navy ramp is diagonal and light
+   at the LEFT, so the wordmark sits in the light and the green state pill
+   sits on the deep end where it separates best. ~10% lightness travel: a
+   panel catching light, not a decorative sweep that will date. White holds
+   9.0:1 even on the lightest stop.
+
+   The 2px brand rule is the second background layer, painted first so it
+   sits on top. It is a background rather than a border because a border
+   cannot hold a gradient and there is no spare element. It lands on the
+   boundary with the grey admin page, which is where it can actually be
+   seen — 4.2:1 against #f0f0f1 below it. */
+.nzwp-bar{
+	margin:0 0 0 -20px;padding:0 20px;
+	background-color:#5b21b6;
+	background-image:
+		linear-gradient(90deg,#ff2424,#e10000),
+		linear-gradient(115deg,#2e1065 0%,#5b21b6 48%,#7c3aed 100%);
+	background-repeat:no-repeat;
+	background-size:100% 2px,100% 100%;
+	background-position:left bottom,left top;
+	/* Light-on-dark only. Applied to the light half of the page it thins
+	   body copy; here it stops white 800-weight caps blooming. */
+	-webkit-font-smoothing:antialiased;
+	-moz-osx-font-smoothing:grayscale;
+	/* Keeps Chrome's auto-dark heuristics from inverting the one dark band
+	   on a page whose surroundings stay light. */
+	color-scheme:light;
+}
+.nzwp-bar-in{
+	display:flex;align-items:center;justify-content:space-between;
+	gap:16px;height:64px;
+	/* Was 940px against a 900px page: the version number floated 40px past
+	   the right edge of every card below it. Same measure, one alignment. */
+	max-width:900px;
+	font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+}
+.nzwp-bar-name{display:flex;align-items:center;gap:12px;min-width:0;overflow:hidden}
+.nzwp-mark{
+	flex:none;color:#fff;font-weight:800;font-size:18px;letter-spacing:.16em;
+	line-height:1;white-space:nowrap;
+	/* letter-spacing hangs a full space off the final P; pull it back so the
+	   divider sits optically centred in the 12px gap, not 12px + .16em. */
+	margin-right:-.16em;
+}
+/* .58 white measured 4.48:1 against the light end of this ramp — under the
+   line by a hair. .68 and .74 are the smallest values that hold 4.5:1
+   across the whole bar (5.1:1 and 5.9:1 at the worst point). min-width:0 +
+   ellipsis so a long translation truncates instead of pushing the state
+   pill off the measure. */
+.nzwp-by{
+	min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+	color:rgba(255,255,255,.68);font-size:12px;line-height:1;text-decoration:none;
+	border-left:1px solid rgba(255,255,255,.24);padding-left:12px;margin-left:2px;
+	transition:color .12s ease;
+}
+.nzwp-by:hover,.nzwp-by:focus{color:#fff}
+/* flex:none so the state and version never compress; they are the two
+   things in the bar that must stay readable at any width. */
+.nzwp-bar-meta{display:flex;align-items:center;gap:12px;flex:none}
+.nzwp-ver{color:rgba(255,255,255,.74);font-size:12px;letter-spacing:.02em;font-variant-numeric:tabular-nums}
+
+/* In the bar only, the status chip echoes the toolbar pill: full round, and
+   the one shallow gradient on the page that carries white text. #0f815a is
+   the lightest green that still holds 4.5:1 under white 12px bold (4.88:1);
+   the bottom stop is 5.9:1. That is the whole trick — pick the top stop
+   first, then ramp down. */
+.nzwp-bar .nzwp-badge{border-radius:999px;padding:3px 11px}
+.nzwp-bar .nzwp-on{
+	background-color:#0e7a53;
+	background-image:linear-gradient(180deg,#0f815a,#0c6a49);
+	color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.20);
+}
+.nzwp-bar .nzwp-off{
+	background-color:rgba(255,255,255,.14);
+	background-image:none;
+	color:rgba(255,255,255,.92);box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);
+}
+
+/* =========================================================== page head == */
+
+.nzwp-wrap{
+	max-width:900px;margin-top:24px;
+	color-scheme:light;
+}
+.nzwp-head{display:flex;align-items:baseline;flex-wrap:wrap;gap:12px;margin:0 0 8px}
+/* Core prints .wrap h1 at 23px/400 with 9px of top padding. Same ballpark,
+   one weight up and the padding taken back so the spacing below is ours. */
+.nzwp-head h1{
+	margin:0;padding:0;font-size:24px;font-weight:600;line-height:1.25;
+	letter-spacing:-.012em;color:#1d2327;text-wrap:balance;
+}
+/* A measure, not a full-bleed line: 900px of 14px text runs to ~110
+   characters, which is a genuinely hard read. */
+.nzwp-sub{color:#50575e;font-size:14px;line-height:1.6;margin:0 0 22px;max-width:66ch;text-wrap:pretty}
+
+/* ======================================================= the figures ==== */
+/* Set as a table of figures rather than four little boxes: label above in
+   tracked caps, figure below in tabular lining numerals, hairlines between.
+   This is the part that actually answers "looks basic", and it does it with
+   alignment and type instead of colour.
+
+   The hairlines are the 1px gap plus a 1px spread shadow on every CELL —
+   not a background on the container. Both draw the same grid when the row
+   is full, but the container trick paints a solid grey slab into the empty
+   tracks of a ragged last row (4 items in a 3-column layout), and this one
+   leaves them white. Edge cells' shadows are clipped by overflow:hidden, so
+   the outer frame stays exactly 1px. */
+.nzwp-grid{
+	display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+	gap:1px;background:#fff;
+	border:1px solid #dcdcde;border-radius:6px;overflow:hidden;
+	margin:18px 0 4px;
+}
+.nzwp-stat{
+	background:#fff;color:#1d2327;border:0;border-radius:0;padding:15px 16px;
+	box-shadow:0 0 0 1px #dcdcde;
+	display:flex;flex-direction:column;align-items:flex-start;gap:7px;
+	min-width:0;overflow-wrap:break-word;
+}
+/* Financial-table reading order is label-then-figure; DOM order is
+   figure-then-label. Explicit `order` rather than column-reverse, so any
+   third node someone adds later keeps order 0 and lands at the top instead
+   of being silently flipped to the bottom. Screen-reader order is unchanged
+   ("92, abilities registered"), which is the natural one. */
+.nzwp-stat span{
+	order:1;color:#50575e;font-size:11px;font-weight:600;line-height:1.4;
+	letter-spacing:.06em;text-transform:uppercase;
+}
+.nzwp-stat b{
+	order:2;display:block;font-size:26px;font-weight:600;line-height:1.15;
+	letter-spacing:-.02em;color:#1d2327;
+	/* Tabular + lining so 92 and 30 occupy identical width and sit on one
+	   optical baseline across the row. 26px rather than 30px because these
+	   cells are not always numbers — Context prints "Yours + system" and
+	   "production" into the same slot, and 30px wraps those to three lines. */
+	font-variant-numeric:tabular-nums lining-nums;
+	font-feature-settings:"tnum" 1,"lnum" 1;
+}
+/* Stated, not inherited: an admin colour scheme owns bare `a` at (0,1,0)
+   and would otherwise repaint this link and kill its hover. */
+.nzwp-stat span a{color:#2271b1;text-decoration:underline;text-underline-offset:2px}
+.nzwp-stat span a:hover{color:#135e96}
+
+/* ==================================================== dashboard tiles === */
+/* These are the four cards in the screenshot. dashboard() prints its own
+   its own style element AFTER Admin::styles(), so these rules carry the .nzwp-wrap
+   ancestor and win on specificity (0,2,1 vs 0,1,1) rather than on source
+   order — .nzwp-dash genuinely sits inside .nzwp-wrap, so the extra
+   ancestor is real and not a superstition. The right fix is to delete that
+   second style element and drop this prefix; this is the version that does
+   not need two methods edited in one commit.
+
+   Labels here stay sentence case at 12.5px while the figure table above
+   uses caps: these carry clauses ("exposed, 3 switched off", "recovery
+   guard -- on with filesystem") and caps at 11px turns those into a wall. */
+.nzwp-wrap .nzwp-dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:0 0 22px}
+.nzwp-wrap .nzwp-dash a,
+.nzwp-wrap .nzwp-dash div.tile{
+	display:block;padding:16px 18px;text-decoration:none;
+	background:#fff;color:#1d2327;
+	border:1px solid #dcdcde;border-radius:6px;
+	/* One pixel of lift, matching wp-admin's own postbox. Any more and the
+	   tile starts competing with the number it holds. */
+	box-shadow:0 1px 1px rgba(0,0,0,.035);
+	transition:border-color .12s ease,box-shadow .12s ease;
+}
+/* Hover changes edge and lift only — no colour, no transform. Blue here
+   would be the colour scheme's, and a 1px translate needs a reduced-motion
+   escape hatch to buy nothing. The guard tile is a div, not a link: nothing
+   on it may imply a click. */
+.nzwp-wrap .nzwp-dash a:hover{border-color:#8c8f94;box-shadow:0 2px 5px rgba(0,0,0,.07)}
+.nzwp-wrap .nzwp-dash div.tile{cursor:default}
+.nzwp-wrap .nzwp-dash b{
+	display:block;font-size:28px;font-weight:600;line-height:1.12;
+	letter-spacing:-.02em;color:#1d2327;
+	font-variant-numeric:tabular-nums lining-nums;
+}
+/* Green survives only where it means something: this thing is on now. */
+.nzwp-wrap .nzwp-dash b.on{color:#0a5c36}
+/* Was #8c8f94 — 2.9:1 on white, under even the 3:1 large-text floor on a
+   number the owner is meant to read. #6f747a is 4.7:1 and still clearly
+   the quiet state. */
+.nzwp-wrap .nzwp-dash b.off{color:#6f747a}
+.nzwp-wrap .nzwp-dash span{display:block;margin-top:6px;color:#50575e;font-size:12.5px;line-height:1.45}
+
+/* ============================================================== cards === */
+
+.nzwp-card{
+	background:#fff;color:#1d2327;
+	border:1px solid #dcdcde;border-radius:6px;
+	padding:22px 24px 24px;margin:0 0 16px;
+	box-shadow:0 1px 1px rgba(0,0,0,.035);
+}
+/* Kills the phantom gutters that make padding look inconsistent card to
+   card — a first paragraph's top margin, a last table's bottom margin. */
+.nzwp-card>:first-child{margin-top:0}
+.nzwp-card>:last-child{margin-bottom:0}
+.nzwp-card h2{
+	display:flex;align-items:center;gap:10px;
+	margin:0 0 16px;padding:0 0 12px;
+	font-size:15px;font-weight:600;line-height:1.35;letter-spacing:-.005em;color:#1d2327;
+	/* One step lighter than the card border, so the card still reads as the
+	   outer boundary and the heading rule reads as an internal division. */
+	border-bottom:1px solid #ebebed;
+}
+/* A status badge that closes a heading goes to the rule's right end.
+   :last-child so a badge sitting mid-heading stays where the markup put it. */
+.nzwp-card h2>.nzwp-badge:last-child{margin-left:auto}
+/* Ring, not a filled dot: the numeral is a wayfinding mark, not a second
+   heading, and a black disc out-weighed the title beside it. Navy rather
+   than grey ties the step markers to the masthead without inventing a hue
+   — and navy is the one place on this page it is safe to spend colour,
+   because red in wp-admin means destructive and these are just steps. */
+.nzwp-num{
+	display:inline-flex;align-items:center;justify-content:center;
+	width:22px;height:22px;border-radius:50%;flex:none;
+	background:transparent;border:1px solid #cfc4ea;color:#4c1d95;
+	font-size:11px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums;
+}
+.nzwp-desc{color:#50575e;margin:6px 0 0;font-size:13px;line-height:1.6;max-width:72ch}
+.nzwp-desc code{font-size:12.5px}
+
+/* ============================================================= badges === */
+/* Tags, not pills, in content: 3px radius, sentence case. Uppercase was
+   tempting and rejected — Abilities Hub prints up to three badges on each
+   of ~90 rows, and caps there shout. Tint carries the state; an inset
+   hairline carries the edge, which is cheaper than a border and keeps the
+   badge's exact height inside a baseline-aligned row. All three clear
+   5.6:1 against their own fill; nowrap so a translated label cannot break
+   inside the lozenge. */
+.nzwp-badge{
+	display:inline-flex;align-items:center;white-space:nowrap;
+	padding:3px 9px;border-radius:3px;
+	font-size:12px;font-weight:600;line-height:1.45;
+}
+.nzwp-on{background:#e6f4ec;color:#0a5c36;box-shadow:inset 0 0 0 1px rgba(10,92,54,.18)}   /* 6.6:1 */
+.nzwp-off{background:#f6f7f7;color:#50575e;box-shadow:inset 0 0 0 1px rgba(30,35,40,.13)}  /* 7.0:1 */
+.nzwp-warn{background:#fcf3e4;color:#8a5700;box-shadow:inset 0 0 0 1px rgba(138,87,0,.20)} /* 5.6:1 */
+
+/* =============================================== code and copy button === */
+
+/* white-space:pre is a bug fix, not a style. .nzwp-code is a <div> fed
+   implode("\n", …) (Admin::clients() and Hub::render()), and with no
+   white-space set every one of those snippets — the Claude Desktop JSON
+   especially — collapses to a single line. The Copy button reads
+   .innerText, which is layout-aware, so it has been copying that collapsed
+   line too. This fixes what people paste, not just what they see. */
+.nzwp-code{
+	background:#1d2327;color:#f0f0f1;
+	white-space:pre;overflow:auto;
+	padding:15px 17px;border-radius:5px;margin:12px 0 6px;
+	font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+	font-size:12.5px;line-height:1.75;
+	/* -> and != must stay two glyphs in a command someone may retype. */
+	font-variant-ligatures:none;
+	box-shadow:inset 0 0 0 1px rgba(255,255,255,.07);
+	/* Shell commands and JSON are LTR even on an RTL admin. */
+	direction:ltr;text-align:left;
+}
+.nzwp-code::selection,.nzwp-code ::selection{background:#3858e9;color:#fff}
+/* Load-bearing: .nzwp-copy is absolutely positioned against this wrapper.
+   Remove it and the button escapes to the initial containing block. */
+.nzwp-copywrap{position:relative}
+/* The shelf the button stands on, scoped to blocks that actually have a
+   button — Abilities Hub prints a .nzwp-code with no Copy, and giving that
+   one an 84px dead gutter would be a bug of its own. */
+.nzwp-copywrap .nzwp-code{padding-right:88px}
+.nzwp-copy{
+	position:absolute;top:9px;right:9px;
+	-webkit-appearance:none;appearance:none;
+	/* Opaque, never translucent: it sits over the first line of the block,
+	   and code showing through a button is unreadable. */
+	background:#2c3338;color:#dcdcde;border:1px solid rgba(255,255,255,.18);
+	border-radius:3px;padding:5px 10px;
+	font-family:inherit;font-size:11px;font-weight:600;letter-spacing:.05em;
+	text-transform:uppercase;line-height:1.5;cursor:pointer;
+	transition:background-color .12s ease,color .12s ease,border-color .12s ease;
+}
+.nzwp-copy:hover{background:#3c434a;color:#fff;border-color:rgba(255,255,255,.34)}
+/* The JS adds .done for 1.6s. Colour AND text colour, so the inherited
+   #dcdcde does not ride a green fill at 5.5:1 when white is available. */
+.nzwp-copy.done{background:#0a5c36;color:#fff;border-color:rgba(255,255,255,.28)}
+
+/* =============================================================== tabs === */
+
+.nzwp-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:16px 0 0;padding:0}
+.nzwp-tab{
+	-webkit-appearance:none;appearance:none;
+	font:inherit;font-size:12.5px;font-weight:500;line-height:1.5;
+	padding:6px 13px;border:1px solid #dcdcde;border-radius:3px;
+	background:#fff;color:#3c434a;cursor:pointer;
+	transition:background-color .12s ease,border-color .12s ease,color .12s ease;
+}
+.nzwp-tab:hover{border-color:#8c8f94;color:#1d2327}
+/* Selection is ink, not admin blue. Blue is the user's colour scheme and
+   changes under us; ink is 15.9:1 in every scheme and never becomes the
+   fourth hue on a page that already carries navy, green and red. Listed
+   after :hover at equal specificity so the selected chip keeps its fill
+   while the pointer is over it. */
+.nzwp-tab[aria-selected="true"]{background:#1d2327;border-color:#1d2327;color:#fff;font-weight:600}
+.nzwp-tab[aria-selected="true"]:hover{background:#101517;border-color:#101517;color:#fff}
+/* Load-bearing: the tab script toggles .is-on. Without these two rules
+   every client pane renders at once. */
+.nzwp-pane{display:none}
+.nzwp-pane.is-on{display:block}
+
+/* ============================================================== focus === */
+/* Ink, not var(--wp-admin-theme-color). That variable is published by the
+   active colour scheme and lands at ~2:1 in Ectoplasm and Coffee — a focus
+   ring that disappears for two of the eight bundled schemes is not a focus
+   ring. Ink is ≥12:1 on every light surface here; white is the same bet on
+   the two dark ones. None of these controls had a visible ring before. */
+.nzwp-tab:focus-visible,
+.nzwp-stat span a:focus-visible,
+.nzwp-wrap .nzwp-dash a:focus-visible{outline:2px solid #1d2327;outline-offset:2px}
+.nzwp-by:focus-visible,.nzwp-copy:focus-visible{outline:2px solid #fff;outline-offset:2px;border-radius:3px}
+
+@media (prefers-reduced-motion:reduce){
+	.nzwp-tab,.nzwp-copy,.nzwp-by,.nzwp-wrap .nzwp-dash a{transition:none}
+}
+
+/* ===================================================== forced colours === */
+/* Windows High Contrast drops background-images and box-shadows, which is
+   where every hairline on this page lives — the figure-table grid, the
+   badge edges, the code block's rim. Redraw them as real borders, and give
+   the selected tab a cue that is not a fill. */
+@media (forced-colors:active){
+	/* The brand rule is a background layer, so it vanishes here; restate it
+	   as a real border or the bar loses its edge against the page. */
+	.nzwp-bar{background-image:none;border-bottom:2px solid CanvasText}
+	.nzwp-stat{box-shadow:none;border:1px solid CanvasText}
+	.nzwp-grid{gap:0}
+	.nzwp-badge,.nzwp-code,.nzwp-copy{border:1px solid CanvasText;box-shadow:none}
+	.nzwp-card h2{border-bottom-color:CanvasText}
+	.nzwp-wrap .nzwp-dash a,.nzwp-wrap .nzwp-dash div.tile{box-shadow:none;border:1px solid CanvasText}
+	.nzwp-tab[aria-selected="true"]{border-width:2px;padding:5px 12px}
+}
+
+/* ================================================= 782px and below ===== */
+/* WordPress switches to its touch layout here and #wpcontent's left padding
+   drops from 20px to 10px, so the bar's negative margin follows it. Those
+   two numbers are a pair — change one and the bar either insets or forces
+   a horizontal scrollbar on the whole admin page. */
+@media screen and (max-width:782px){
+	.nzwp-bar{margin-left:-10px;padding:0 10px}
+	/* min-height rather than height: normally one 56px row, but a long
+	   translated status label wraps to a second row instead of overflowing. */
+	.nzwp-bar-in{height:auto;min-height:56px;flex-wrap:wrap;row-gap:8px;column-gap:12px;padding:8px 0}
+	.nzwp-mark{font-size:16px;letter-spacing:.13em}
+	.nzwp-by{font-size:11px}
+
+	.nzwp-wrap{margin-top:16px}
+	.nzwp-head{gap:8px;margin-bottom:6px}
+	.nzwp-head h1{font-size:21px}
+	.nzwp-sub{font-size:13px;margin-bottom:18px}
+
+	/* Two columns, not one: these are short readouts and a single column
+	   turns four of them into a column of mostly empty card. */
+	.nzwp-grid{grid-template-columns:repeat(2,minmax(0,1fr));margin:14px 0 2px}
+	.nzwp-stat{padding:13px 14px;gap:6px}
+	.nzwp-stat b{font-size:21px}
+	.nzwp-stat span{font-size:10px;letter-spacing:.055em}
+
+	.nzwp-wrap .nzwp-dash{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:18px}
+	.nzwp-wrap .nzwp-dash a,.nzwp-wrap .nzwp-dash div.tile{padding:14px 15px}
+	.nzwp-wrap .nzwp-dash b{font-size:23px}
+
+	.nzwp-card{padding:18px 16px 20px}
+	.nzwp-card h2{font-size:14px;margin-bottom:14px;padding-bottom:11px}
+
+	/* Absolutely positioned over the block, Copy is a 24px tap target
+	   sitting on the first line of a command. Out of the flow it goes; the
+	   markup already prints the button before .nzwp-code, so it stacks
+	   above the block and the block no longer needs its right-hand shelf. */
+	.nzwp-copywrap{display:flex;flex-direction:column}
+	.nzwp-copy{position:static;align-self:flex-start;margin:0 0 8px;padding:8px 13px;font-size:12px}
+	.nzwp-copywrap .nzwp-code{padding-right:14px}
+	/* Out of the well and onto the white card, so the white ring that worked
+	   against #1d2327 would now be invisible. */
+	.nzwp-copy:focus-visible{outline-color:#1d2327}
+	.nzwp-code{font-size:12px;line-height:1.7;padding:13px 14px}
+
+	/* Buttons, not inputs, so wp-admin's 16px anti-zoom rule never reaches
+	   them — but the tap target still has to clear 32px. */
+	.nzwp-tabs{gap:8px}
+	.nzwp-tab{padding:8px 13px;font-size:13px}
+}
+
+@media screen and (max-width:600px){
+	/* The wordmark and the state pill are what the bar is for; the credit
+	   line is the first thing to go. */
+	.nzwp-by{display:none}
+	.nzwp-bar-meta{gap:8px}
+}
 		</style>
 		<?php
 	}
@@ -416,61 +791,6 @@ final class Admin {
 			],
 		];
 		?>
-		<style>
-			.nzwp-dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:0 0 22px}
-			/* A shallow gradient rather than flat white: enough for the tile to
-			   sit on the grey background instead of dissolving into it, not so
-			   much that four of them start competing with the page. */
-			.nzwp-dash a,.nzwp-dash div.tile{
-				display:flex;
-				flex-direction:column;
-				justify-content:center;
-				min-height:82px;
-				background:linear-gradient(180deg,#fff 0%,#fbfbfc 100%);
-				border:1px solid #e0e0e4;
-				border-radius:8px;
-				padding:16px 18px;
-				text-decoration:none;
-				color:inherit;
-				box-shadow:0 1px 2px rgba(16,24,40,.04);
-				transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease;
-			}
-			/* Only the linked tiles lift. The recovery guard tile goes nowhere,
-			   so pretending it is clickable would be a lie. */
-			.nzwp-dash a:hover{
-				border-color:#c4b5fd;
-				box-shadow:0 3px 10px rgba(76,29,149,.10);
-				transform:translateY(-1px);
-			}
-			.nzwp-dash a:focus-visible{outline:2px solid #7c3aed;outline-offset:2px}
-			.nzwp-dash b{
-				display:block;
-				font-size:27px;
-				font-weight:600;
-				line-height:1.1;
-				letter-spacing:-.02em;
-				font-variant-numeric:tabular-nums lining-nums;
-				color:#1d2327;
-			}
-			.nzwp-dash b.on{color:#0a5c36}
-			.nzwp-dash b.off{color:#8c8f94}
-			/* Small caps under the figure, the way a table of figures labels a
-			   column. Keeps the number the thing the eye lands on. */
-			.nzwp-dash span{
-				display:block;
-				margin-top:7px;
-				color:#646970;
-				font-size:11px;
-				font-weight:500;
-				letter-spacing:.045em;
-				text-transform:uppercase;
-			}
-			@media(max-width:782px){
-				.nzwp-dash{gap:10px}
-				.nzwp-dash a,.nzwp-dash div.tile{min-height:0;padding:14px 16px}
-				.nzwp-dash b{font-size:23px}
-			}
-		</style>
 		<div class="nzwp-dash">
 			<?php foreach ( $tiles as $t ) : ?>
 				<?php if ( '' !== $t['href'] ) : ?>
