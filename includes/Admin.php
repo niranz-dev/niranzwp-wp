@@ -876,8 +876,8 @@ final class Admin {
 				'key'   => 'abilities',
 				'value' => (string) $abilities,
 				'label' => 0 === $disabled
-					? __( 'abilities', 'niranzwp' )
-					: sprintf( __( 'abilities, %d switched off', 'niranzwp' ), $disabled ),
+					? __( 'abilities available', 'niranzwp' )
+					: sprintf( __( 'available, %d switched off', 'niranzwp' ), $disabled ),
 				'href'  => admin_url( 'admin.php?page=niranzwp-abilities' ),
 				'tone'  => Settings::active() ? 'on' : 'off',
 			],
