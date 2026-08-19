@@ -1,129 +1,178 @@
+<div align="center">
+
 # NiranzWP
 
-An MCP server for WordPress. It gives an AI agent — Claude Code, Cursor, Codex,
-or anything else that speaks MCP — a set of purpose-built abilities for working
-on a site, instead of a shell and a hope.
+**An MCP server for WordPress that an agent can be trusted with.**
 
-Every write previews before it runs, is snapshotted first, and is put back
-automatically if it takes the site down.
+Fifty-one purpose-built abilities instead of a shell and a hope.
+Every write previews before it runs, is snapshotted first, and puts itself back if it takes the site down.
+
+[![Release](https://img.shields.io/github/v/release/niranz-dev/niranzwp-wp?label=release&color=7c3aed)](https://github.com/niranz-dev/niranzwp-wp/releases)
+[![npm](https://img.shields.io/npm/v/niranzwp?label=CLI&color=7c3aed)](https://www.npmjs.com/package/niranzwp)
+[![WordPress](https://img.shields.io/badge/WordPress-6.9%2B-7c3aed)](https://wordpress.org)
+[![PHP](https://img.shields.io/badge/PHP-8.0%2B-7c3aed)](https://php.net)
+[![License](https://img.shields.io/badge/license-MIT-7c3aed)](LICENSE)
+
+</div>
+
+---
 
 ```bash
 npm install -g niranzwp
 niranzwp auth login https://your-site.com
 ```
 
-A code appears in the terminal. Type it into wp-admin, approve, and the terminal
-is connected. No passwords are copied around and nothing is stored on the site
-that the site can hand back.
+```
+Open this page and enter the code:
+  https://your-site.com/wp-admin/admin.php?page=niranzwp-connect&code=BFME-6QUV
+  code: BFME-6QUV
+
+Waiting...
+Connected "your-site" -> https://your-site.com via OAuth
+Tokens stored in macOS Keychain; they refresh automatically.
+```
+
+Type the code into wp-admin, approve, done. No password is copied anywhere, and
+nothing is stored on the site that the site could hand back.
 
 ---
 
-## Why not just run PHP
+## The problem this exists for
 
-Most tools in this space give an agent one very sharp instrument: run arbitrary
-PHP, write arbitrary files. That works right up until it doesn't, and the site
-is down at three in the morning with nobody sure which of the last forty
+Most tools in this space hand an agent one very sharp instrument: run arbitrary
+PHP, write arbitrary files. It works beautifully until it doesn't, and then the
+site is down at three in the morning and nobody is sure which of the last forty
 commands did it.
 
-NiranzWP takes the opposite position. Fifty-one abilities, each of which knows
-what it is for, refuses input that would corrupt what it touches, and can be
-undone:
+The usual answer is to lock the agent into a sandbox directory, which solves the
+problem by making the tool useless on a real site.
 
-- **A write is checked before it lands.** A PHP file that does not parse is
-  never written. A block whose markup would not survive a round trip through
-  the editor is refused, not saved and regretted.
-- **A write leaves a checkpoint.** Every change records what was there before,
-  and `checkpoint-restore` puts it back.
-- **A write that breaks the site undoes itself.** A must-use plugin watches the
-  next request; if the site has stopped answering, the change is reverted
-  without anyone being awake to notice.
-- **Both dangerous switches are off out of the box.** Filesystem access and PHP
-  execution have to be turned on deliberately, on a screen that says what they
-  mean.
+NiranzWP takes the third position. Give the agent abilities that *know what they
+are for*, so the dangerous operation is not the default one — and make every
+write reversible so being wrong is survivable.
 
-`evaluate` is still there for the cases nothing else covers. It just isn't the
-first thing reached for.
+## Four things that are always true
+
+**A write is checked before it lands.**
+A PHP file that does not parse is never written. A block whose markup would not
+survive a round trip through the editor is refused rather than saved and
+regretted. An upload only moves into place once its declared size and SHA-256
+match what actually arrived.
+
+**A write leaves a checkpoint.**
+Every change records what was there before. `checkpoint-restore` puts it back.
+
+**A write that breaks the site undoes itself.**
+A must-use plugin watches the next request. If the site has stopped answering,
+the change is reverted — without anyone being awake to notice.
+
+**The dangerous switches are off out of the box.**
+Filesystem access and PHP execution are opt-in, on a screen that says plainly
+what they mean.
+
+`evaluate` is still there for what nothing else covers. It just isn't the first
+thing reached for, and its own description tells the agent so.
 
 ## What it can do
 
-| | |
-|---|---|
-| **SEO** | Audit titles and descriptions, find what is missing, rank what to fix first, write meta, check schema, `llms.txt`, internal link suggestions |
-| **Content** | List, audit, and refresh posts; set image alt text; find thin and stale pages |
-| **Blocks & design** | Read and write blocks safely, inspect registered block types, read and write theme.json design tokens |
-| **Files** | Read (paged), list (recursive, globbed), write, edit, delete, and disable or re-enable a file without deleting it |
-| **Database** | Report on size and bloat, clean up transients and revisions, report on autoloaded options |
-| **Operations** | Site info, plugin list, cache purge, WP-CLI, checkpoints, uploads of any size |
-| **Skills** | Store reusable instructions on the site itself, so every client that connects reads the same brief |
+<table>
+<tr><td width="150"><b>SEO</b></td><td>Audit titles and descriptions · find what is missing · rank what to fix first · write meta · schema audit · <code>llms.txt</code> · internal link suggestions · GEO checks</td></tr>
+<tr><td><b>Content</b></td><td>List, audit and refresh posts · set image alt text · find thin and stale pages · content priorities</td></tr>
+<tr><td><b>Blocks &amp; design</b></td><td>Read and write blocks without corrupting them · inspect registered block types · read and write <code>theme.json</code> design tokens · Elementor read and update</td></tr>
+<tr><td><b>Files</b></td><td>Read (paged) · list (recursive, globbed) · write · edit · delete · disable or re-enable a file without deleting it</td></tr>
+<tr><td><b>Database</b></td><td>Size and bloat report · transient and revision cleanup · autoloaded options report</td></tr>
+<tr><td><b>Operations</b></td><td>Site info · plugin list · cache purge · WP-CLI · checkpoints · uploads of any size</td></tr>
+<tr><td><b>Skills</b></td><td>Store reusable instructions on the site itself, so every client that connects reads the same brief</td></tr>
+</table>
 
-Run `niranzwp discover` for the full list on your own site.
+```bash
+niranzwp discover                      # everything this site exposes
+niranzwp run niranzwp/seo-audit        # and run any of it
+```
 
-## Uploading files
+## Moving files
 
 `create-upload-link` mints a single-use bearer token and takes the bytes as the
 body of one request. Use it for anything large or binary — a plugin ZIP, a
 theme, media, a generated file.
 
-The alternative most tools are left with is base64 inside a PHP payload, which
-is a third larger than the file and arrives looking like an attack to every
-firewall. Measured on an 803 KB archive against a production host: the chunked
-approach failed twice and never completed; this took one request and 3.9
-seconds.
+The alternative most tools are left with is base64 inside a PHP payload: a third
+larger than the file, and shaped exactly like an attack to every firewall in
+front of it.
 
-The upload only moves into place once its declared size and SHA-256 match what
-arrived, and once PHP parses it. Nothing is written on failure.
+Measured on an 803 KB archive against a production host behind a WAF:
+
+| | chunked base64 | `create-upload-link` |
+|---|---|---|
+| requests | 19 | **1** |
+| on the wire | ~1.1 MB | **822 KB** |
+| result | failed twice, never completed | **HTTP 201 in 3.9s** |
 
 ## Security
 
-Access is granted by a person clicking a button in wp-admin. There is no other
-path in.
+**Access is granted by a person clicking a button in wp-admin. There is no other
+path in.**
 
-- **OAuth 2.0 device grant** (RFC 8628) with dynamic client registration
-  (RFC 7591) and metadata (RFC 8414). Registering grants nothing; a `client_id`
-  is a name to poll under.
-- **Nothing is stored in plaintext.** Device codes and both token types are kept
-  as SHA-256. The site cannot hand back a credential it does not have.
-- **Refresh tokens rotate**, with a two-minute grace window so a client that
-  lost a response is not locked out — and after that window, presenting a spent
-  token revokes every token descended from the same approval.
-- **The off switch holds.** Turning abilities off stops issued tokens
-  authenticating, not just the abilities. It also covers a domain lock, so a
-  database restored elsewhere does not arrive with working credentials.
-- **No credential is issued over plain HTTP**, because every one of them is a
-  bearer token.
-- **The admin screens refuse to be framed** (`X-Frame-Options: DENY`,
-  `frame-ancestors 'none'`). A nonce does not stop clickjacking — it borrows a
-  real request from a real user — and the approval screen is exactly the kind of
-  button worth borrowing.
-- **The open endpoints are metered**, per address, so a script cannot fill the
-  options table of a site whose owner never connected anything.
+| | |
+|---|---|
+| **Standards** | OAuth 2.0 device grant (RFC 8628), dynamic client registration (RFC 7591), authorization server metadata (RFC 8414) |
+| **Storage** | Device codes and both token types kept as SHA-256. The site cannot hand back a credential it does not have |
+| **Rotation** | Refresh tokens rotate, with a two-minute grace window so a client that lost a response is not locked out. After that window, presenting a spent token revokes every token descended from the same approval |
+| **The off switch** | Turning abilities off stops issued tokens *authenticating*, not merely the abilities — and covers a domain lock, so a database restored elsewhere does not arrive with working credentials |
+| **Transport** | No credential is issued over plain HTTP. Loopback and `.local` / `.test` are allowed so development still works |
+| **Framing** | Every admin screen sends `X-Frame-Options: DENY` and `frame-ancestors 'none'`. A nonce does not stop clickjacking — it borrows a real request from a real user — and an approval button is exactly what is worth borrowing |
+| **Metering** | The endpoints that must be open to strangers are rate-limited per address |
+| **Registration** | A stranger cannot evict a working client to make room for themselves |
 
 Found something? Open an issue, or write to security@niranz.dev.
 
 ## Requirements
 
-WordPress 6.9 or newer (for the Abilities API), PHP 8.0 or newer.
+WordPress 6.9+ (for the [Abilities API](https://developer.wordpress.org/plugins/abilities-api/)) · PHP 8.0+
 
 ## Install
 
-Download the latest `niranzwp-wp-*.zip` from
-[Releases](https://github.com/niranz-dev/niranzwp-wp/releases), then
-**Plugins → Add New Plugin → Upload Plugin**. Updates after that appear in
-wp-admin like any other plugin.
+1. Download the latest `niranzwp-wp-*.zip` from [Releases](https://github.com/niranz-dev/niranzwp-wp/releases)
+2. **Plugins → Add New Plugin → Upload Plugin**
+3. **NiranzWP → Configuration** — turn on the abilities you want
 
-Then, in **NiranzWP → Configuration**, turn on the abilities you want. Filesystem
-and PHP execution are off until you say otherwise.
+Updates appear in wp-admin like any other plugin from then on.
+
+## The CLI
+
+```bash
+npm install -g niranzwp
+```
+
+| | |
+|---|---|
+| `auth login <url>` | Connect, via the device flow or a browser |
+| `discover` | Every ability this site exposes |
+| `run <ability>` | Run one |
+| `file read/list/write/edit/delete` | Work with files directly |
+| `auth list` / `auth logout` | Manage connections |
+
+Credentials go to the macOS Keychain, Windows DPAPI, or `secret-tool` on Linux —
+never a plaintext file, and never a command-line argument.
 
 ## Uninstalling
 
 Deleting the plugin removes what belongs to the plugin: its settings, the domain
 lock, and the recovery guard.
 
-It does not remove what you wrote — the site brief, design notes, skills, and
+It does not remove what *you* wrote — the site brief, design notes, skills, and
 every checkpoint, which are the only record of what a write replaced. Those go
-only if you ask, and it asks when you click Deactivate rather than leaving the
-decision buried in a settings screen.
+only if you ask, and it asks at the click on **Deactivate**, where a person is
+still present, rather than leaving the decision buried in a settings screen.
+
+## Contributing
+
+Issues and pull requests welcome. The CLI lives in its own repository and ships
+with 104 end-to-end tests that run against a real WordPress install — please
+keep them passing.
 
 ## Licence
 
-MIT.
+MIT. Open source, free forever.
+
+<div align="center"><sub>Built by <a href="https://niranz.dev">Niranjan</a></sub></div>
