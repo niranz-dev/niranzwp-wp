@@ -437,17 +437,21 @@ final class Admin {
 .nzwp-grid{
 	display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
 	gap:1px;
-	background-color:#fff;
-	background-image:linear-gradient(90deg,#5b21b6,#7c3aed);
-	background-repeat:no-repeat;
-	background-size:100% 2px;
-	background-position:left top;
-	border:1px solid #dcdcde;border-radius:6px;overflow:hidden;
+	/* The masthead's gradient, so the strip reads as the same object rather
+	   than as a white panel quoting it. White on the lightest stop is 5.9:1,
+	   so nothing here is spent on legibility. */
+	background-color:#5b21b6;
+	background-image:linear-gradient(115deg,#2e1065 0%,#5b21b6 48%,#7c3aed 100%);
+	border:1px solid #4c1d95;border-radius:6px;overflow:hidden;
 	margin:18px 0 4px;
 }
 .nzwp-stat{
-	background:#fff;color:#1d2327;border:0;border-radius:0;padding:15px 16px;
-	box-shadow:0 0 0 1px #dcdcde;
+	/* Transparent so the gradient runs behind the whole strip instead of
+	   restarting in each cell; the dividers are the 1px gaps plus a
+	   translucent-white ring on every cell, which the container's overflow
+	   clips at the outer edge. */
+	background:transparent;color:#fff;border:0;border-radius:0;padding:15px 16px;
+	box-shadow:0 0 0 1px rgba(255,255,255,.16);
 	display:flex;flex-direction:column;align-items:flex-start;gap:7px;
 	min-width:0;overflow-wrap:break-word;
 }
@@ -461,12 +465,12 @@ final class Admin {
    on the label says which column, colour on the number would say something
    about its value. */
 .nzwp-stat span{
-	order:1;color:#5b21b6;font-size:11px;font-weight:600;line-height:1.4;
+	order:1;color:rgba(255,255,255,.80);font-size:11px;font-weight:600;line-height:1.4;
 	letter-spacing:.06em;text-transform:uppercase;
 }
 .nzwp-stat b{
 	order:2;display:block;font-size:26px;font-weight:600;line-height:1.15;
-	letter-spacing:-.02em;color:#1d2327;
+	letter-spacing:-.02em;color:#fff;
 	/* Tabular + lining so 92 and 30 occupy identical width and sit on one
 	   optical baseline across the row. 26px rather than 30px because these
 	   cells are not always numbers — Context prints "Yours + system" and
@@ -478,8 +482,11 @@ final class Admin {
    and would otherwise repaint this link and kill its hover. */
 /* The plugin's own violet rather than the admin scheme's blue, which changes
    under us. 8.9:1 on white, and underlined so colour is not the only signal. */
-.nzwp-stat span a{color:#5b21b6;text-decoration:underline;text-underline-offset:2px}
-.nzwp-stat span a:hover{color:#4c1d95}
+/* On violet the link cannot be violet, and white alone would be
+   indistinguishable from the labels beside it, so the underline does the
+   work and hover fills it in. */
+.nzwp-stat span a{color:#fff;text-decoration:underline;text-underline-offset:2px;text-decoration-color:rgba(255,255,255,.55)}
+.nzwp-stat span a:hover{color:#fff;text-decoration-color:#fff}
 .nzwp-stat span a:hover{color:#135e96}
 
 /* ==================================================== dashboard tiles === */
