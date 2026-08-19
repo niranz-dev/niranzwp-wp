@@ -313,22 +313,11 @@ final class Admin {
    at the LEFT, so the wordmark sits in the light and the green state pill
    sits on the deep end where it separates best. ~10% lightness travel: a
    panel catching light, not a decorative sweep that will date. White holds
-   9.0:1 even on the lightest stop.
-
-   The 2px brand rule is the second background layer, painted first so it
-   sits on top. It is a background rather than a border because a border
-   cannot hold a gradient and there is no spare element. It lands on the
-   boundary with the grey admin page, which is where it can actually be
-   seen — 4.2:1 against #f0f0f1 below it. */
+   9.0:1 even on the lightest stop. */
 .nzwp-bar{
 	margin:0 0 0 -20px;padding:0 20px;
 	background-color:#5b21b6;
-	background-image:
-		linear-gradient(90deg,#ff2424,#e10000),
-		linear-gradient(115deg,#2e1065 0%,#5b21b6 48%,#7c3aed 100%);
-	background-repeat:no-repeat;
-	background-size:100% 2px,100% 100%;
-	background-position:left bottom,left top;
+	background-image:linear-gradient(115deg,#2e1065 0%,#5b21b6 48%,#7c3aed 100%);
 	/* Light-on-dark only. Applied to the light half of the page it thins
 	   body copy; here it stops white 800-weight caps blooming. */
 	-webkit-font-smoothing:antialiased;
