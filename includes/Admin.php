@@ -393,7 +393,6 @@ final class Admin {
 			Recovery::uninstall();
 		}
 		Settings::set_runtime( isset( $_POST['runtime'] ) );
-		Settings::set_purge_on_delete( isset( $_POST['purge_on_delete'] ) );
 		if ( $enabled ) {
 			Settings::remember_domain();
 		}
@@ -1197,16 +1196,6 @@ final class Admin {
 				<p class="nzwp-desc">
 					<?php esc_html_e( 'Lets a connected client evaluate PHP inside this site and run WP-CLI commands against it. Whoever holds the credential can do anything WordPress can do. Development and staging only.', 'niranzwp' ); ?>
 				</p>
-				<p style="margin-top:16px">
-					<input type="checkbox" name="purge_on_delete" id="nzwp-purge" value="1" autocomplete="off" style="position:relative;z-index:1" <?php checked( Settings::purge_on_delete() ); ?>>
-					<label for="nzwp-purge" style="cursor:pointer;font-weight:600">
-						<?php esc_html_e( 'Also delete my content if the plugin is deleted', 'niranzwp' ); ?>
-					</label>
-				</p>
-				<p class="nzwp-desc">
-					<?php esc_html_e( 'Deleting the plugin always removes its own settings and the recovery guard. It keeps the site brief, the design notes, your skills and every checkpoint, so a reinstall finds them waiting. Tick this only if you want those gone too - there is no undo.', 'niranzwp' ); ?>
-				</p>
-
 				<?php submit_button( __( 'Save settings', 'niranzwp' ), 'primary', 'submit', false ); ?>
 			</form>
 
@@ -1214,7 +1203,7 @@ final class Admin {
 				<div class="nzwp-stat"><b><?php echo (int) $count; ?></b><span><?php esc_html_e( 'abilities registered', 'niranzwp' ); ?></span></div>
 				<div class="nzwp-stat"><b><?php echo $enabled ? '&#10003;' : '&mdash;'; ?></b><span><?php esc_html_e( 'clients allowed', 'niranzwp' ); ?></span></div>
 				<div class="nzwp-stat"><b><?php echo $mcp_up ? '&#10003;' : '&mdash;'; ?></b><span><?php esc_html_e( 'MCP adapter loaded', 'niranzwp' ); ?></span></div>
-				<div class="nzwp-stat"><b><?php echo count( Connections::all() ); ?></b><span><a href="<?php echo esc_url( admin_url( 'admin.php?page=niranzwp-connections' ) ); ?>"><?php esc_html_e( 'connected clients', 'niranzwp' ); ?></a></span></div>
+				<div class="nzwp-stat"><b><?php echo count( Connections::all() ) + count( Connections::oauth() ); ?></b><span><a href="<?php echo esc_url( admin_url( 'admin.php?page=niranzwp-connections' ) ); ?>"><?php esc_html_e( 'connected clients', 'niranzwp' ); ?></a></span></div>
 			</div>
 		</div>
 

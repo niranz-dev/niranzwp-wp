@@ -4,11 +4,11 @@ Tags: cli, rest-api, abilities, seo, automation
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 1.1.0
+Stable tag: 5.3.1
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
-Exposes safe, purpose-built abilities so CLIs and AI agents can work with this site through the WordPress Abilities API.
+MCP server that gives AI agents control of WordPress through purpose-built abilities - SEO, content, blocks, the database and files. Every write is previewed, snapshotted, and reverted automatically if the site breaks.
 
 == Description ==
 

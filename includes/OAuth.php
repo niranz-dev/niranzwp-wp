@@ -440,6 +440,57 @@ final class OAuth {
 		delete_user_meta( $user_id, self::TOKEN_META );
 	}
 
+	/**
+	 * Everything the owner needs to recognise a connection, and decide about it.
+	 *
+	 * The token record stores only the client id, because that is all the grant
+	 * needs. A person looking at a list of connections needs the name the tool
+	 * gave when it registered, so join the two here rather than making the
+	 * screen understand how either is stored.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	public static function connections( int $user_id ): array {
+		$clients = self::clients();
+		$out     = [];
+
+		foreach ( self::list_tokens( $user_id ) as $t ) {
+			$client_id = (string) ( $t['client_id'] ?? '' );
+			$out[]     = [
+				'client_id' => $client_id,
+				'name'      => (string) ( $clients[ $client_id ]['name'] ?? 'Unnamed client' ),
+				'created'   => (int) ( $t['created'] ?? 0 ),
+				'last_used' => (int) ( $t['last_used'] ?? 0 ),
+				'expires'   => (int) ( $t['refresh_expires'] ?? 0 ),
+			];
+		}
+
+		usort( $out, static fn( array $a, array $b ): int => $b['created'] <=> $a['created'] );
+		return $out;
+	}
+
+	/**
+	 * Revoke one connection.
+	 *
+	 * Matched on the client id rather than on a position in the array, because
+	 * the list is filtered and re-sorted before it reaches the screen and a row
+	 * index there means nothing here. Returns how many grants went, since one
+	 * client that connected twice holds two.
+	 */
+	public static function revoke_client( int $user_id, string $client_id ): int {
+		$tokens = self::tokens( $user_id );
+		$kept   = array_values( array_filter(
+			$tokens,
+			static fn( array $t ): bool => (string) ( $t['client_id'] ?? '' ) !== $client_id
+		) );
+
+		$gone = count( $tokens ) - count( $kept );
+		if ( $gone > 0 ) {
+			update_user_meta( $user_id, self::TOKEN_META, $kept );
+		}
+		return $gone;
+	}
+
 	/* -------------------------------------------------------------- plumbing */
 
 	/** @return array<string,array<string,mixed>> */

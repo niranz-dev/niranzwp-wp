@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       NiranzWP
  * Plugin URI:        https://niranz.dev
- * Description:       Connect Claude, Cursor, Codex or any MCP client to this site. Fifty-one abilities across SEO, content, blocks, the database and the filesystem - every write previews before it runs, is snapshotted first, and is put back automatically if it takes the site down.
- * Version:           5.2.6
+ * Description:       MCP server that gives AI agents control of WordPress through purpose-built abilities - SEO, content, blocks, the database and files. Every write is previewed, snapshotted, and reverted automatically if the site breaks.
+ * Version:           5.3.1
  * Requires at least: 6.9
  * Requires PHP:      8.0
  * Author:            Niranjan
@@ -21,7 +21,7 @@ namespace NiranzWP;
 
 defined( 'ABSPATH' ) || exit;
 
-const VERSION     = '5.2.6';
+const VERSION     = '5.3.1';
 /* Placeholder until the repository is public. Whatever this points at is what
    the masthead's GitHub mark opens, so it is one line to change and nothing
    else references it. */
@@ -52,6 +52,7 @@ require_once NIRANZWP_DIR . 'includes/CheckpointAdmin.php';
 require_once NIRANZWP_DIR . 'includes/ContextAdmin.php';
 require_once NIRANZWP_DIR . 'includes/Runtime.php';
 require_once NIRANZWP_DIR . 'includes/Cli.php';
+require_once NIRANZWP_DIR . 'includes/Deactivate.php';
 require_once NIRANZWP_DIR . 'includes/Mcp.php';
 require_once NIRANZWP_DIR . 'includes/Connections.php';
 require_once NIRANZWP_DIR . 'includes/OAuth.php';
@@ -93,6 +94,7 @@ function boot(): void {
 	Mcp::init();
 	Connections::init();
 	OAuth::init();
+	Deactivate::init();
 	Admin::init();
 	Details::init();
 	Updater::init();

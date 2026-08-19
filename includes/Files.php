@@ -255,6 +255,14 @@ final class Files {
 
 		$base = (string) realpath( ABSPATH );
 		$full = $base . '/' . $path;
+
+		// PHP keeps a realpath cache per process, for two minutes by default,
+		// and PHP-FPM hands successive requests to whichever worker is free.
+		// So a file renamed by one request can still look present to the next,
+		// and every existence decision below would be answered from a cache
+		// rather than from the disk. Ask about this one path specifically.
+		clearstatcache( true, $full );
+
 		$real = realpath( $full );
 
 		if ( false === $real ) {
