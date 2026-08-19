@@ -275,18 +275,29 @@ final class Admin {
 		<style>
 			/* The bar spans the content column, so it has to escape the
 			   padding WordPress puts on #wpbody-content. */
-			.nzwp-bar{background:#12326b;margin:0 0 0 -20px;padding:0 20px;box-shadow:inset 0 -1px 0 rgba(255,255,255,.12)}
+			/* Deep violet into a lighter one, angled so the lift runs across the
+			   bar rather than straight down. The inner top line is the light
+			   catching the edge; the bottom one separates it from the grey
+			   admin background without needing a border. */
+			.nzwp-bar{
+				background:linear-gradient(115deg,#2e1065 0%,#5b21b6 48%,#7c3aed 100%);
+				margin:0 0 0 -20px;
+				padding:0 20px;
+				box-shadow:
+					inset 0 1px 0 rgba(255,255,255,.14),
+					inset 0 -1px 0 rgba(0,0,0,.22);
+			}
 			.nzwp-bar-in{display:flex;align-items:center;justify-content:space-between;gap:16px;height:64px;max-width:940px}
 			.nzwp-mark{color:#fff;font-weight:800;font-size:19px;letter-spacing:.14em;line-height:1}
 			/* Grouped with the wordmark so the bar still has two children and
 			   space-between keeps the name left and the state right. Reads as
 			   part of the name rather than as another status field. */
 			.nzwp-bar-name{display:flex;align-items:center;gap:12px;min-width:0}
-			.nzwp-by{color:rgba(255,255,255,.55);font-size:12px;text-decoration:none;line-height:1;border-left:1px solid rgba(255,255,255,.22);padding-left:12px;margin-left:2px}
+			.nzwp-by{color:rgba(255,255,255,.66);font-size:12px;text-decoration:none;line-height:1;border-left:1px solid rgba(255,255,255,.22);padding-left:12px;margin-left:2px}
 			.nzwp-by:hover,.nzwp-by:focus{color:rgba(255,255,255,.9)}
 			@media(max-width:600px){.nzwp-by{display:none}}
 			.nzwp-bar-meta{display:flex;align-items:center;gap:12px}
-			.nzwp-ver{color:rgba(255,255,255,.62);font-size:12px;font-variant-numeric:tabular-nums}
+			.nzwp-ver{color:rgba(255,255,255,.72);font-size:12px;font-variant-numeric:tabular-nums}
 			.nzwp-bar .nzwp-on{background:#0e7a53;color:#fff}
 			.nzwp-bar .nzwp-off{background:rgba(255,255,255,.16);color:rgba(255,255,255,.85)}
 			@media(max-width:782px){.nzwp-bar{margin-left:-10px;padding:0 10px}.nzwp-bar-in{height:56px}}
