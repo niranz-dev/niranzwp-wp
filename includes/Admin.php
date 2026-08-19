@@ -417,14 +417,59 @@ final class Admin {
 		];
 		?>
 		<style>
-			.nzwp-dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:0 0 20px}
-			.nzwp-dash a,.nzwp-dash div.tile{display:block;background:#fff;border:1px solid #dcdcde;border-radius:6px;
-				padding:16px 18px;text-decoration:none;color:inherit;transition:border-color .15s,box-shadow .15s}
-			.nzwp-dash a:hover{border-color:#2271b1;box-shadow:0 1px 3px rgba(0,0,0,.06)}
-			.nzwp-dash b{display:block;font-size:26px;line-height:1.15;font-variant-numeric:tabular-nums;color:#1d2327}
+			.nzwp-dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:0 0 22px}
+			/* A shallow gradient rather than flat white: enough for the tile to
+			   sit on the grey background instead of dissolving into it, not so
+			   much that four of them start competing with the page. */
+			.nzwp-dash a,.nzwp-dash div.tile{
+				display:flex;
+				flex-direction:column;
+				justify-content:center;
+				min-height:82px;
+				background:linear-gradient(180deg,#fff 0%,#fbfbfc 100%);
+				border:1px solid #e0e0e4;
+				border-radius:8px;
+				padding:16px 18px;
+				text-decoration:none;
+				color:inherit;
+				box-shadow:0 1px 2px rgba(16,24,40,.04);
+				transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease;
+			}
+			/* Only the linked tiles lift. The recovery guard tile goes nowhere,
+			   so pretending it is clickable would be a lie. */
+			.nzwp-dash a:hover{
+				border-color:#c4b5fd;
+				box-shadow:0 3px 10px rgba(76,29,149,.10);
+				transform:translateY(-1px);
+			}
+			.nzwp-dash a:focus-visible{outline:2px solid #7c3aed;outline-offset:2px}
+			.nzwp-dash b{
+				display:block;
+				font-size:27px;
+				font-weight:600;
+				line-height:1.1;
+				letter-spacing:-.02em;
+				font-variant-numeric:tabular-nums lining-nums;
+				color:#1d2327;
+			}
 			.nzwp-dash b.on{color:#0a5c36}
 			.nzwp-dash b.off{color:#8c8f94}
-			.nzwp-dash span{display:block;margin-top:5px;color:#646970;font-size:12.5px}
+			/* Small caps under the figure, the way a table of figures labels a
+			   column. Keeps the number the thing the eye lands on. */
+			.nzwp-dash span{
+				display:block;
+				margin-top:7px;
+				color:#646970;
+				font-size:11px;
+				font-weight:500;
+				letter-spacing:.045em;
+				text-transform:uppercase;
+			}
+			@media(max-width:782px){
+				.nzwp-dash{gap:10px}
+				.nzwp-dash a,.nzwp-dash div.tile{min-height:0;padding:14px 16px}
+				.nzwp-dash b{font-size:23px}
+			}
 		</style>
 		<div class="nzwp-dash">
 			<?php foreach ( $tiles as $t ) : ?>
