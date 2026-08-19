@@ -383,6 +383,9 @@ final class Admin {
 	color-scheme:light;
 }
 .nzwp-head{display:flex;align-items:baseline;flex-wrap:wrap;gap:12px;margin:0 0 8px}
+/* With the heading hidden the row collapses, and its bottom margin would
+   still push the subtitle down by 8px of nothing. */
+.nzwp-head:has(> .screen-reader-text){margin:0}
 /* Core prints .wrap h1 at 23px/400 with 9px of top padding. Same ballpark,
    one weight up and the padding taken back so the spacing below is ours. */
 .nzwp-head h1{
@@ -499,7 +502,7 @@ final class Admin {
 .nzwp-wrap .nzwp-dash b.on{color:#0a5c36}
 .nzwp-wrap .nzwp-dash b.off{color:#6b7075}
 /* Caps below the figure, the way a column of figures is labelled. These carry
-   clauses - "exposed, 3 switched off" - so they stay small rather than being
+   clauses - "abilities, 3 switched off" - so they stay small rather than being
    set in the same tracked caps as the figure strip further down. */
 .nzwp-wrap .nzwp-dash span{
 	display:block;margin-top:7px;color:#50575e;
@@ -832,7 +835,18 @@ final class Admin {
 		</div>
 		<?php
 		echo '<div class="wrap nzwp-wrap">';
-		echo '<div class="nzwp-head"><h1>' . esc_html( $title ) . '</h1></div>';
+
+		/*
+		 * On the Configuration screen the heading repeats the wordmark two
+		 * inches above it, so it is hidden rather than removed: the wordmark
+		 * is a span, and dropping the h1 would leave the page with no heading
+		 * at all for anything reading the document rather than looking at it.
+		 * Every other screen has a heading that says something the masthead
+		 * does not - Abilities Hub, Checkpoints, Troubleshoot - and keeps it.
+		 */
+		$duplicate = $title === __( 'NiranzWP', 'niranzwp' );
+		echo '<div class="nzwp-head"><h1' . ( $duplicate ? ' class="screen-reader-text"' : '' ) . '>'
+			. esc_html( $title ) . '</h1></div>';
 
 		// The bar above already carries the name, version and state. Repeating
 		// the site's own name under every heading was noise.
@@ -862,15 +876,15 @@ final class Admin {
 				'key'   => 'abilities',
 				'value' => (string) $abilities,
 				'label' => 0 === $disabled
-					? __( 'abilities exposed', 'niranzwp' )
-					: sprintf( __( 'exposed, %d switched off', 'niranzwp' ), $disabled ),
+					? __( 'abilities', 'niranzwp' )
+					: sprintf( __( 'abilities, %d switched off', 'niranzwp' ), $disabled ),
 				'href'  => admin_url( 'admin.php?page=niranzwp-abilities' ),
 				'tone'  => Settings::active() ? 'on' : 'off',
 			],
 			[
 				'key'   => 'skills',
 				'value' => (string) $skills,
-				'label' => __( 'skills available', 'niranzwp' ),
+				'label' => __( 'skills', 'niranzwp' ),
 				'href'  => admin_url( 'admin.php?page=niranzwp-skills' ),
 				'tone'  => '',
 			],
