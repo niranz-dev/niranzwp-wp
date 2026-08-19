@@ -437,12 +437,13 @@ final class Admin {
 .nzwp-grid{
 	display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
 	gap:1px;
-	/* The masthead's gradient, so the strip reads as the same object rather
-	   than as a white panel quoting it. White on the lightest stop is 5.9:1,
-	   so nothing here is spent on legibility. */
-	background-color:#5b21b6;
-	background-image:linear-gradient(115deg,#2e1065 0%,#5b21b6 48%,#7c3aed 100%);
-	border:1px solid #4c1d95;border-radius:6px;overflow:hidden;
+	/* The masthead's ramp, lifted at the dark end so the strip is lighter
+	   overall without moving the light end, which is where the limit is:
+	   white holds 4.9:1 on #7c3aed and anything lighter puts the 11px caps
+	   under the floor. 9.9:1 at the dark end, 6.3:1 through the middle. */
+	background-color:#6d28d9;
+	background-image:linear-gradient(115deg,#4c1d95 0%,#6d28d9 48%,#7c3aed 100%);
+	border:1px solid #5b21b6;border-radius:6px;overflow:hidden;
 	margin:18px 0 4px;
 }
 .nzwp-stat{
