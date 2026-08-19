@@ -115,6 +115,21 @@ add_action( 'plugins_loaded', __NAMESPACE__ . '\\boot' );
  * what the state is instead of leaving two of them to be inferred from their
  * absence.
  */
+/*
+ * The recovery guard is a mu-plugin, and deactivating a plugin does not touch
+ * mu-plugins. Left alone it keeps loading on every request, watching for a
+ * marker that nothing writes any more - harmless, since it is self-contained
+ * and calls nothing from this plugin, but it is a file the owner did not put
+ * there and did not ask to keep. Its own header says it is safe to delete when
+ * NiranzWP is not installed; this is that deletion.
+ *
+ * Nothing else is removed here. Deactivating is not deleting, and settings,
+ * skills and checkpoints should survive being switched off and on again.
+ */
+register_deactivation_hook( __FILE__, static function (): void {
+	Recovery::uninstall();
+} );
+
 register_activation_hook( __FILE__, static function (): void {
 	if ( false === get_option( OPTION_KEY ) ) {
 		add_option(

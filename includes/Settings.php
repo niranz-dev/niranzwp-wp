@@ -35,6 +35,25 @@ final class Settings {
 		return self::all()['runtime'];
 	}
 
+	/**
+	 * Whether deleting the plugin should also take the owner's own content -
+	 * the site brief, the design notes, the skills, the checkpoints.
+	 *
+	 * Off unless asked. Somebody wrote those, and removing a plugin is not
+	 * consent to destroy them; a reinstall should find them waiting.
+	 */
+	public static function purge_on_delete(): bool {
+		$saved = is_array( get_option( OPTION_KEY, [] ) ) ? get_option( OPTION_KEY, [] ) : [];
+		return (bool) ( $saved['purge_on_delete'] ?? false );
+	}
+
+	public static function set_purge_on_delete( bool $on ): void {
+		$s                    = get_option( OPTION_KEY, [] );
+		$s                    = is_array( $s ) ? $s : [];
+		$s['purge_on_delete'] = $on;
+		update_option( OPTION_KEY, $s );
+	}
+
 	public static function set_runtime( bool $on ): void {
 		$s            = get_option( OPTION_KEY, [] );
 		$s            = is_array( $s ) ? $s : [];
