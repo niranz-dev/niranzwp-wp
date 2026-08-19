@@ -85,6 +85,37 @@ final class Connections {
 	 * this one is red. Core has no destructive button style -- only
 	 * .button-link-delete, which is a text link.
 	 */
+
+	/**
+	 * A time, said twice.
+	 *
+	 * "in 4 weeks" answers the question a person actually has, and an exact
+	 * timestamp answers the one they have next - when a connection is being
+	 * matched against something else that happened, or written down. Showing
+	 * only the relative form makes the second question a calculation; showing
+	 * only the timestamp makes the first one a calculation.
+	 *
+	 * wp_date(), not gmdate(), so the exact line is in the timezone the site is
+	 * configured for rather than UTC.
+	 */
+	private static function when( int $ts, bool $future = false ): string {
+		if ( ! $ts ) {
+			return '<span style="color:#8c8f94">' . esc_html__( 'never', 'niranzwp' ) . '</span>';
+		}
+
+		$relative = $future
+			/* translators: %s: a length of time, e.g. "4 weeks". */
+			? sprintf( __( 'in %s', 'niranzwp' ), human_time_diff( time(), $ts ) )
+			/* translators: %s: a length of time, e.g. "21 minutes". */
+			: sprintf( __( '%s ago', 'niranzwp' ), human_time_diff( $ts ) );
+
+		return sprintf(
+			'%s<br><span style="color:#8c8f94;font-size:11px">%s</span>',
+			esc_html( $relative ),
+			esc_html( wp_date( 'j M Y, H:i', $ts ) )
+		);
+	}
+
 	private static function styles(): void {
 		?>
 		<style>
@@ -139,17 +170,9 @@ final class Connections {
 					'<tr><td><strong>%s</strong></td><td>%s</td><td>%s</td><td>%s</td>'
 					. '<td><a href="%s" class="button button-small nzwp-danger" onclick="return confirm(%s)">%s</a></td></tr>',
 					esc_html( (string) $g['name'] ),
-					esc_html( $g['created'] ? gmdate( 'j M Y', (int) $g['created'] ) : '-' ),
-					esc_html(
-						$g['last_used']
-							? human_time_diff( (int) $g['last_used'] ) . ' ' . __( 'ago', 'niranzwp' )
-							: __( 'never', 'niranzwp' )
-					),
-					esc_html(
-						$g['expires']
-							? __( 'in', 'niranzwp' ) . ' ' . human_time_diff( time(), (int) $g['expires'] )
-							: '-'
-					),
+					esc_html( $g['created'] ? wp_date( 'j M Y', (int) $g['created'] ) : '-' ),
+					self::when( (int) $g['last_used'] ),
+					self::when( (int) $g['expires'], true ),
 					esc_url( $revoke ),
 					esc_attr( wp_json_encode( __( 'Revoke this connection? The tool using it will stop working immediately.', 'niranzwp' ) ) ),
 					esc_html__( 'Revoke', 'niranzwp' )
@@ -178,9 +201,9 @@ final class Connections {
 
 		foreach ( $items as $item ) {
 			$uuid = (string) ( $item['uuid'] ?? '' );
-			$used = ! empty( $item['last_used'] )
-				? human_time_diff( (int) $item['last_used'] ) . ' ' . __( 'ago', 'niranzwp' )
-				: __( 'never', 'niranzwp' );
+			// when() returns escaped markup of its own, so it must not be
+			// escaped again on the way out.
+			$used = self::when( (int) ( $item['last_used'] ?? 0 ) );
 
 			$revoke = wp_nonce_url(
 				admin_url( 'admin-post.php?action=niranzwp_revoke&uuid=' . rawurlencode( $uuid ) ),
@@ -191,8 +214,8 @@ final class Connections {
 				'<tr><td><strong>%s</strong></td><td>%s</td><td>%s</td><td>%s</td>'
 				. '<td><a href="%s" class="button button-small nzwp-danger" onclick="return confirm(%s)">%s</a></td></tr>',
 				esc_html( (string) ( $item['name'] ?? '(unnamed)' ) ),
-				esc_html( ! empty( $item['created'] ) ? gmdate( 'j M Y', (int) $item['created'] ) : '-' ),
-				esc_html( $used ),
+				esc_html( ! empty( $item['created'] ) ? wp_date( 'j M Y', (int) $item['created'] ) : '-' ),
+				$used,
 				esc_html( (string) ( $item['last_ip'] ?? '-' ) ),
 				esc_url( $revoke ),
 				esc_attr( wp_json_encode( __( 'Revoke this connection? The client using it will stop working immediately.', 'niranzwp' ) ) ),

@@ -4,7 +4,7 @@ Tags: cli, rest-api, abilities, seo, automation
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.0
-Stable tag: 5.3.5
+Stable tag: 5.3.6
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
