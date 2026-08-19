@@ -101,8 +101,34 @@ add_action( 'plugins_loaded', __NAMESPACE__ . '\\boot' );
  * Abilities are off on activation. Turning them on has to be a deliberate act,
  * not a side effect of installing a plugin.
  */
+/*
+ * Everything off on a fresh install.
+ *
+ * Activating a plugin is not the same act as granting a tool access to the
+ * site, and this one grants a lot: abilities on their own are admin-only but
+ * real, files reach the install, and the runtime switch is WordPress itself.
+ * The copy under each checkbox says to leave them off unless something is
+ * connecting, and the defaults should agree with it rather than quietly
+ * disagreeing.
+ *
+ * All three keys are written rather than just the one, so what is stored says
+ * what the state is instead of leaving two of them to be inferred from their
+ * absence.
+ */
 register_activation_hook( __FILE__, static function (): void {
 	if ( false === get_option( OPTION_KEY ) ) {
-		add_option( OPTION_KEY, [ 'enabled' => false ] );
+		add_option(
+			OPTION_KEY,
+			[
+				'enabled' => false,
+				'files'   => false,
+				'runtime' => false,
+			]
+		);
 	}
+
+	// Read once by the notice below, then deleted. A transient rather than an
+	// option so an install that never sees wp-admin does not leave a row
+	// behind for good.
+	set_transient( 'niranzwp_just_activated', 1, 60 );
 } );

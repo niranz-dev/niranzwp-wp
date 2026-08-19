@@ -24,6 +24,7 @@ final class Admin {
 		add_action( 'admin_menu', [ self::class, 'menu' ] );
 		add_action( 'admin_post_niranzwp_save', [ self::class, 'handle_save' ] );
 		add_action( 'admin_post_niranzwp_toggle', [ self::class, 'handle_toggle' ] );
+		add_action( 'admin_notices', [ self::class, 'activation_notice' ] );
 		add_action( 'admin_bar_menu', [ self::class, 'admin_bar' ], 100 );
 		/*
 		 * Printed immediately before the toolbar itself rather than in either
@@ -45,6 +46,38 @@ final class Admin {
 		add_submenu_page( self::SLUG, __( 'Skills', 'niranzwp' ), __( 'Skills', 'niranzwp' ), CAPABILITY, self::SLUG . '-skills', [ SkillsAdmin::class, 'render' ] );
 		add_submenu_page( self::SLUG, __( 'Checkpoints', 'niranzwp' ), __( 'Checkpoints', 'niranzwp' ), CAPABILITY, self::SLUG . '-checkpoints', [ CheckpointAdmin::class, 'render' ] );
 		add_submenu_page( self::SLUG, __( 'Troubleshoot', 'niranzwp' ), __( 'Troubleshoot', 'niranzwp' ), CAPABILITY, self::SLUG . '-troubleshoot', [ self::class, 'render_troubleshoot' ] );
+	}
+
+	/**
+	 * Point at the settings once, right after activation.
+	 *
+	 * Everything ships off, which is correct and also silent: activate the
+	 * plugin and nothing happens, with no indication that a switch is waiting.
+	 * One notice, shown once, on the screen the user is already looking at.
+	 *
+	 * Skipped when abilities are already on, which is the case on a
+	 * reactivation - there is nothing to point at then.
+	 */
+	public static function activation_notice(): void {
+		if ( ! get_transient( 'niranzwp_just_activated' ) ) {
+			return;
+		}
+		delete_transient( 'niranzwp_just_activated' );
+
+		if ( ! current_user_can( CAPABILITY ) || Settings::enabled() ) {
+			return;
+		}
+		?>
+		<div class="notice notice-info is-dismissible">
+			<p>
+				<strong><?php esc_html_e( 'NiranzWP is installed.', 'niranzwp' ); ?></strong>
+				<?php esc_html_e( 'Nothing is switched on yet - a tool cannot reach this site until AI abilities are enabled.', 'niranzwp' ); ?>
+				<a href="<?php echo esc_url( admin_url( 'admin.php?page=' . self::SLUG ) ); ?>">
+					<?php esc_html_e( 'Open settings', 'niranzwp' ); ?>
+				</a>
+			</p>
+		</div>
+		<?php
 	}
 
 	/**
@@ -867,7 +900,7 @@ final class Admin {
 				</span>
 				<span class="nzwp-bar-meta">
 					<span class="nzwp-badge <?php echo Settings::active() ? 'nzwp-on' : 'nzwp-off'; ?>">
-						<?php echo Settings::active() ? esc_html__( 'Abilities on', 'niranzwp' ) : esc_html__( 'Abilities off', 'niranzwp' ); ?>
+						<?php echo Settings::active() ? esc_html__( 'AI abilities on', 'niranzwp' ) : esc_html__( 'AI abilities off', 'niranzwp' ); ?>
 					</span>
 					<span class="nzwp-ver"><?php echo esc_html( VERSION ); ?></span>
 				</span>
