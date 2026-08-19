@@ -458,110 +458,58 @@ final class Admin {
 .nzwp-stat span a:hover{color:#135e96}
 
 /* ==================================================== dashboard tiles === */
-/* These are the four cards in the screenshot. dashboard() prints its own
-   its own style element AFTER Admin::styles(), so these rules carry the .nzwp-wrap
-   ancestor and win on specificity (0,2,1 vs 0,1,1) rather than on source
-   order — .nzwp-dash genuinely sits inside .nzwp-wrap, so the extra
-   ancestor is real and not a superstition. The right fix is to delete that
-   second style element and drop this prefix; this is the version that does
-   not need two methods edited in one commit.
+/* Not tiles any more. Four boxes on a grey page spend most of their area on
+   nothing and read as widgets; set as a plain row of figures with hairline
+   dividers, the same four facts read as a masthead for the page. The markup
+   still says a/div and b/span, so this is entirely a matter of taking the
+   containers away.
 
-   Labels here stay sentence case at 12.5px while the figure table above
-   uses caps: these carry clauses ("exposed, 3 switched off", "recovery
-   guard -- on with filesystem") and caps at 11px turns those into a wall. */
-.nzwp-wrap .nzwp-dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:0 0 22px}
+   dashboard() prints its own style element after Admin::styles(), so these
+   rules carry the .nzwp-wrap ancestor and win on specificity rather than on
+   source order. */
+.nzwp-wrap .nzwp-dash{
+	display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+	gap:0;margin:2px 0 26px;
+}
 .nzwp-wrap .nzwp-dash a,
 .nzwp-wrap .nzwp-dash div.tile{
-	/* Tighter than it was. The row read as empty not because the tiles were
-	   too narrow but because they were too tall for what they hold - widening
-	   them would have added more of the same space, not less. */
-	display:block;padding:13px 15px;text-decoration:none;
-	/* A tinted surface rather than white. Four white boxes on a grey page have
-	   nothing to hold them together; a single soft violet ties them to the
-	   masthead and separates them from the cards below, which stay white.
-	   Ink on #f6f2fe is 14.8:1, so nothing is spent on legibility. */
-	background:#f6f2fe;color:#1d2327;
-	border:1px solid #e3d9fa;border-radius:8px;
-	/* One pixel of lift, matching wp-admin's own postbox. Any more and the
-	   tile starts competing with the number it holds. */
-	box-shadow:0 1px 1px rgba(0,0,0,.035);
-	transition:border-color .12s ease,box-shadow .12s ease;
+	display:block;padding:2px 22px;text-decoration:none;
+	background:none;border:0;border-radius:0;box-shadow:none;
+	color:#1d2327;
+	/* The divider sits on the left of every cell and is removed from the
+	   first, so a row that wraps to two lines still divides correctly - a
+	   right-hand border would leave a stray line at the end of each row. */
+	border-left:1px solid #e0e0e4;
+	transition:none;
 }
-/* Hover changes edge and lift only — no colour, no transform. Blue here
-   would be the colour scheme's, and a 1px translate needs a reduced-motion
-   escape hatch to buy nothing. The guard tile is a div, not a link: nothing
-   on it may imply a click. */
-.nzwp-wrap .nzwp-dash a:hover{background:#f1eafd;border-color:#c4b5fd;box-shadow:0 2px 6px rgba(76,29,149,.12)}
+.nzwp-wrap .nzwp-dash a:first-child,
+.nzwp-wrap .nzwp-dash div.tile:first-child{border-left:0;padding-left:0}
+/* Nothing to lift, so hover speaks in the only two things left: the figure
+   takes the brand violet and the label darkens. */
+.nzwp-wrap .nzwp-dash a:hover b{color:#5b21b6}
+.nzwp-wrap .nzwp-dash a:hover span{color:#1d2327}
+.nzwp-wrap .nzwp-dash a:hover b.on{color:#0a5c36}
 .nzwp-wrap .nzwp-dash div.tile{cursor:default}
 .nzwp-wrap .nzwp-dash b{
-	display:block;font-size:25px;font-weight:600;line-height:1.1;
-	letter-spacing:-.022em;color:#1d2327;
+	display:block;font-size:38px;font-weight:600;line-height:1.05;
+	letter-spacing:-.03em;color:#1d2327;
 	font-variant-numeric:tabular-nums lining-nums;
 }
 /* Green survives only where it means something: this thing is on now. */
 .nzwp-wrap .nzwp-dash b.on{color:#0a5c36}
-/* Was #8c8f94 — 2.9:1 on white, under even the 3:1 large-text floor on a
-   number the owner is meant to read. #6f747a is 4.7:1 and still clearly
-   the quiet state. */
 .nzwp-wrap .nzwp-dash b.off{color:#6b7075}
-.nzwp-wrap .nzwp-dash span{display:block;margin-top:3px;color:#4a4f57;font-size:12.5px;line-height:1.4}
-
-/* Each tile gets a mark. Four boxes holding nothing but a figure and a label
-   read as plain no matter how they are spaced, and the row is the first thing
-   on the page. The icons are inline SVG data URIs on a pseudo-element, since
-   the markup has no element to put one in - white strokes on a violet disc, so
-   one file works on any tint. */
-.nzwp-wrap .nzwp-dash a,
-.nzwp-wrap .nzwp-dash div.tile{position:relative;padding-right:56px}
-.nzwp-wrap .nzwp-dash a::after,
-.nzwp-wrap .nzwp-dash div.tile::after{
-	content:"";
-	position:absolute;top:13px;right:13px;
-	width:30px;height:30px;border-radius:9px;
-	background-color:#6d28d9;
-	background-image:linear-gradient(180deg,#7c3aed,#5b21b6);
-	background-repeat:no-repeat;
-	background-position:center;
-	background-size:16px 16px;
-	box-shadow:0 1px 2px rgba(76,29,149,.30),inset 0 1px 0 rgba(255,255,255,.22);
-	transition:transform .14s ease;
+/* Caps below the figure, the way a column of figures is labelled. These carry
+   clauses - "exposed, 3 switched off" - so they stay small rather than being
+   set in the same tracked caps as the figure strip further down. */
+.nzwp-wrap .nzwp-dash span{
+	display:block;margin-top:7px;color:#50575e;
+	font-size:12px;font-weight:500;line-height:1.4;letter-spacing:.01em;
 }
-/* The disc turns green on the two tiles that report a live "on" state, so the
-   colour agrees with the figure beside it rather than contradicting it. */
-.nzwp-wrap .nzwp-dash a:has(b.on)::after,
-.nzwp-wrap .nzwp-dash div.tile:has(b.on)::after{
-	background-color:#0e7a53;
-	background-image:linear-gradient(180deg,#12946a,#0b6042);
-	box-shadow:0 1px 2px rgba(10,92,54,.30),inset 0 1px 0 rgba(255,255,255,.22);
-}
-.nzwp-wrap .nzwp-dash a:has(b.off)::after,
-.nzwp-wrap .nzwp-dash div.tile:has(b.off)::after{
-	background-color:#8c8f94;
-	background-image:linear-gradient(180deg,#9ea1a6,#7c8085);
-	box-shadow:0 1px 2px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.22);
-}
-.nzwp-wrap .nzwp-dash a:hover::after{transform:translateY(-1px)}
-@media (prefers-reduced-motion: reduce){
-	.nzwp-wrap .nzwp-dash a:hover::after{transform:none}
-}
-.nzwp-wrap .nzwp-dash .t-abilities::after{background-image:linear-gradient(180deg,#7c3aed,#5b21b6),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='7' height='7' rx='1.5'/%3E%3Crect x='14' y='3' width='7' height='7' rx='1.5'/%3E%3Crect x='3' y='14' width='7' height='7' rx='1.5'/%3E%3Crect x='14' y='14' width='7' height='7' rx='1.5'/%3E%3C/svg%3E")}
-.nzwp-wrap .nzwp-dash .t-skills::after{background-image:linear-gradient(180deg,#7c3aed,#5b21b6),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z'/%3E%3Cpath d='M9 7.5h6'/%3E%3Cpath d='M9 11h4'/%3E%3C/svg%3E")}
-.nzwp-wrap .nzwp-dash .t-checkpoints::after{background-image:linear-gradient(180deg,#7c3aed,#5b21b6),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12a9 9 0 1 0 3-6.7'/%3E%3Cpath d='M3 4v5h5'/%3E%3Cpath d='M12 8v4l3 2'/%3E%3C/svg%3E")}
-.nzwp-wrap .nzwp-dash .t-guard::after{background-image:linear-gradient(180deg,#7c3aed,#5b21b6),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l7 3v5.5c0 4.3-2.9 8.2-7 9.5-4.1-1.3-7-5.2-7-9.5V6z'/%3E%3Cpath d='M9 12l2 2 4-4'/%3E%3C/svg%3E")}
-/* The gradient is repeated in each of the four rules above because a longhand
-   background-image replaces the shorthand wholesale; the tint rules that
-   follow re-state it again for the same reason. */
-.nzwp-wrap .nzwp-dash a:has(b.on).t-abilities::after{background-image:linear-gradient(180deg,#12946a,#0b6042),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='7' height='7' rx='1.5'/%3E%3Crect x='14' y='3' width='7' height='7' rx='1.5'/%3E%3Crect x='3' y='14' width='7' height='7' rx='1.5'/%3E%3Crect x='14' y='14' width='7' height='7' rx='1.5'/%3E%3C/svg%3E")}
-.nzwp-wrap .nzwp-dash div.tile:has(b.on).t-guard::after{background-image:linear-gradient(180deg,#12946a,#0b6042),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l7 3v5.5c0 4.3-2.9 8.2-7 9.5-4.1-1.3-7-5.2-7-9.5V6z'/%3E%3Cpath d='M9 12l2 2 4-4'/%3E%3C/svg%3E")}
-.nzwp-wrap .nzwp-dash a:has(b.off).t-abilities::after{background-image:linear-gradient(180deg,#9ea1a6,#7c8085),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='7' height='7' rx='1.5'/%3E%3Crect x='14' y='3' width='7' height='7' rx='1.5'/%3E%3Crect x='3' y='14' width='7' height='7' rx='1.5'/%3E%3Crect x='14' y='14' width='7' height='7' rx='1.5'/%3E%3C/svg%3E")}
-.nzwp-wrap .nzwp-dash div.tile:has(b.off).t-guard::after{background-image:linear-gradient(180deg,#9ea1a6,#7c8085),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l7 3v5.5c0 4.3-2.9 8.2-7 9.5-4.1-1.3-7-5.2-7-9.5V6z'/%3E%3Cpath d='M9 12l2 2 4-4'/%3E%3C/svg%3E")}
-/* :has() is unsupported in older Safari and Firefox ESR; those get the violet
-   disc, which is correct-looking rather than wrong. Nothing depends on it. */
 @media(max-width:782px){
+	.nzwp-wrap .nzwp-dash{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));row-gap:20px}
 	.nzwp-wrap .nzwp-dash a,
-	.nzwp-wrap .nzwp-dash div.tile{padding-right:52px}
-	.nzwp-wrap .nzwp-dash a::after,
-	.nzwp-wrap .nzwp-dash div.tile::after{width:26px;height:26px;background-size:14px 14px;top:12px;right:12px}
+	.nzwp-wrap .nzwp-dash div.tile{padding:2px 16px}
+	.nzwp-wrap .nzwp-dash b{font-size:30px}
 }
 
 /* ============================================================== cards === */
@@ -1109,6 +1057,42 @@ final class Admin {
 				'note'  => __( 'Add this to your Codex config.', 'niranzwp' ),
 				'code'  => "[mcp_servers.{$slug}]\nurl = \"{$endpoint}\"",
 				'where' => '~/.codex/config.toml',
+			],
+			[
+				'label' => 'OpenCode',
+				'note'  => __( 'Add this inside the mcp block. type must be "remote".', 'niranzwp' ),
+				'code'  => "{\n  \"mcp\": {\n    \"{$slug}\": {\n      \"type\": \"remote\",\n      \"url\": \"{$endpoint}\",\n      \"enabled\": true\n    }\n  }\n}",
+				'where' => '~/.config/opencode/opencode.json',
+			],
+			[
+				'label' => 'Windsurf',
+				'note'  => __( 'Add this inside the mcpServers block.', 'niranzwp' ),
+				'code'  => "{\n  \"mcpServers\": {\n    \"{$slug}\": {\n      \"serverUrl\": \"{$endpoint}\"\n    }\n  }\n}",
+				'where' => '~/.codeium/windsurf/mcp_config.json',
+			],
+			[
+				'label' => 'Zed',
+				'note'  => __( 'Add this inside context_servers in your Zed settings.', 'niranzwp' ),
+				'code'  => "{\n  \"context_servers\": {\n    \"{$slug}\": {\n      \"source\": \"custom\",\n      \"url\": \"{$endpoint}\"\n    }\n  }\n}",
+				'where' => '~/.config/zed/settings.json',
+			],
+			[
+				'label' => 'Cline',
+				'note'  => __( 'Add this inside the mcpServers block. Cline reads it from the VS Code extension directory.', 'niranzwp' ),
+				'code'  => "{\n  \"mcpServers\": {\n    \"{$slug}\": {\n      \"type\": \"streamableHttp\",\n      \"url\": \"{$endpoint}\"\n    }\n  }\n}",
+				'where' => 'cline_mcp_settings.json',
+			],
+			[
+				'label' => 'Continue',
+				'note'  => __( 'Add this to your Continue config.', 'niranzwp' ),
+				'code'  => "mcpServers:\n  - name: {$slug}\n    type: streamable-http\n    url: {$endpoint}",
+				'where' => '~/.continue/config.yaml',
+			],
+			[
+				'label' => 'Any MCP client',
+				'note'  => __( 'The endpoint itself, for anything that speaks MCP over HTTP and is not listed above.', 'niranzwp' ),
+				'code'  => "{$endpoint}",
+				'where' => '',
 			],
 		];
 	}
