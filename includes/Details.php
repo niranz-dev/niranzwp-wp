@@ -54,6 +54,20 @@ final class Details {
 			return $meta;
 		}
 
+		/*
+		 * Core builds this link itself whenever the row carries a slug, which
+		 * it does the moment an update is pending - so on exactly the screens
+		 * that matter most, adding ours produced "View details | View details".
+		 * Look for the link rather than for the condition that causes it; the
+		 * condition is core's to change and the link is what is actually being
+		 * avoided.
+		 */
+		foreach ( $meta as $existing ) {
+			if ( str_contains( (string) $existing, 'tab=plugin-information' ) ) {
+				return $meta;
+			}
+		}
+
 		$meta[] = sprintf(
 			'<a href="%s" class="thickbox open-plugin-details-modal" aria-label="%s" data-title="NiranzWP">%s</a>',
 			esc_url( add_query_arg(
