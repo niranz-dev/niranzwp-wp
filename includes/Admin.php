@@ -165,7 +165,7 @@ final class Admin {
 		] );
 
 		$rows = [
-			'abilities' => [ __( 'AI Abilities', 'niranzwp' ), true ],
+			'abilities' => [ __( 'Abilities', 'niranzwp' ), true ],
 			'files'     => [ __( 'File writes', 'niranzwp' ), $files ],
 			'runtime'   => [ __( 'PHP runtime', 'niranzwp' ), $runtime ],
 		];
@@ -211,7 +211,7 @@ final class Admin {
 		$bar->add_node( [
 			'id'     => 'niranzwp-toggle',
 			'parent' => 'niranzwp-on',
-			'title'  => esc_html__( 'Turn off AI Abilities', 'niranzwp' ),
+			'title'  => esc_html__( 'Turn off abilities', 'niranzwp' ),
 			'href'   => wp_nonce_url(
 				admin_url( 'admin-post.php?action=niranzwp_toggle' ),
 				self::TOGGLE_NONCE
@@ -228,6 +228,10 @@ final class Admin {
 
 	/**
 	 * One-click off from the admin bar.
+	 *
+	 * Called "abilities" here and everywhere else. The AI prefix said less than
+	 * it looked: the CLI reaches the same surface without an AI anywhere in the
+	 * path, and WordPress's own API calls them abilities.
 	 *
 	 * Only ever switches off. Turning this back on means going to the settings
 	 * page and seeing what else is being enabled alongside it, which is not
