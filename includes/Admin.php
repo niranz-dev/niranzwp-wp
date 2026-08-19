@@ -453,12 +453,15 @@ final class Admin {
    Labels here stay sentence case at 12.5px while the figure table above
    uses caps: these carry clauses ("exposed, 3 switched off", "recovery
    guard -- on with filesystem") and caps at 11px turns those into a wall. */
-.nzwp-wrap .nzwp-dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin:0 0 22px}
+.nzwp-wrap .nzwp-dash{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:0 0 22px}
 .nzwp-wrap .nzwp-dash a,
 .nzwp-wrap .nzwp-dash div.tile{
-	display:block;padding:16px 18px;text-decoration:none;
+	/* Tighter than it was. The row read as empty not because the tiles were
+	   too narrow but because they were too tall for what they hold - widening
+	   them would have added more of the same space, not less. */
+	display:block;padding:13px 15px;text-decoration:none;
 	background:#fff;color:#1d2327;
-	border:1px solid #dcdcde;border-radius:6px;
+	border:1px solid #dcdcde;border-radius:8px;
 	/* One pixel of lift, matching wp-admin's own postbox. Any more and the
 	   tile starts competing with the number it holds. */
 	box-shadow:0 1px 1px rgba(0,0,0,.035);
@@ -471,8 +474,8 @@ final class Admin {
 .nzwp-wrap .nzwp-dash a:hover{border-color:#8c8f94;box-shadow:0 2px 5px rgba(0,0,0,.07)}
 .nzwp-wrap .nzwp-dash div.tile{cursor:default}
 .nzwp-wrap .nzwp-dash b{
-	display:block;font-size:28px;font-weight:600;line-height:1.12;
-	letter-spacing:-.02em;color:#1d2327;
+	display:block;font-size:25px;font-weight:600;line-height:1.1;
+	letter-spacing:-.022em;color:#1d2327;
 	font-variant-numeric:tabular-nums lining-nums;
 }
 /* Green survives only where it means something: this thing is on now. */
@@ -481,7 +484,7 @@ final class Admin {
    number the owner is meant to read. #6f747a is 4.7:1 and still clearly
    the quiet state. */
 .nzwp-wrap .nzwp-dash b.off{color:#6f747a}
-.nzwp-wrap .nzwp-dash span{display:block;margin-top:6px;color:#50575e;font-size:12.5px;line-height:1.45}
+.nzwp-wrap .nzwp-dash span{display:block;margin-top:3px;color:#50575e;font-size:12.5px;line-height:1.4}
 
 /* ============================================================== cards === */
 
