@@ -53,7 +53,7 @@ final class Runtime {
 			'niranzwp/evaluate',
 			[
 				'label'               => __( 'Evaluate PHP', 'niranzwp' ),
-				'description'         => __( 'Evaluates PHP inside the loaded WordPress runtime and returns the value it produces, anything it printed, and any error it raised. Equivalent to "wp eval". This is full control of the site: enable it on development and staging only.', 'niranzwp' ),
+				'description'         => self::guidance(),
 				'category'            => 'niranzwp-runtime',
 				'input_schema'        => [
 					'type'       => 'object',
@@ -70,10 +70,42 @@ final class Runtime {
 				'execute_callback'    => [ self::class, 'evaluate' ],
 				'meta'                => [
 					'show_in_rest' => true,
-					'annotations'  => [ 'readonly' => false, 'destructive' => true ],
+					'annotations'  => [
+						'readonly'    => false,
+						'destructive' => true,
+						// Repeated from the description because clients differ
+						// on which field they surface, and this is the one
+						// ability where not reading it is expensive.
+						'instructions' => self::guidance(),
+					],
 				],
 			]
 		);
+	}
+
+	/**
+	 * What a client needs to know before running arbitrary PHP here.
+	 *
+	 * The first paragraph is the important one. Every other ability in this
+	 * plugin carries a guard - a parse check, a checkpoint, a preview, an
+	 * armed recovery - and reaching the same effect through eval() has none of
+	 * them. That is not theoretical: a file written this way rather than
+	 * through write-file took a production site down for an hour.
+	 */
+	private static function guidance(): string {
+		return __( 'Evaluates PHP inside the loaded WordPress runtime and returns the value it produces, anything it printed, and any warning or error it raised. Equivalent to "wp eval". This is full control of the site.', 'niranzwp' )
+			. "\n" . ''
+			. "\n" . __( 'PREFER A DEDICATED ABILITY WHERE ONE EXISTS. Everything reached through here bypasses the guards the other abilities carry: write-file parses PHP before writing it, takes a checkpoint and arms the recovery guard; edit-file refuses an ambiguous match; delete-file and purge-cache preview by default. file_put_contents() called from here has none of that. Use write-file or create-upload-link for files, edit-file for a change inside one, block-write for post content, purge-cache for caches.', 'niranzwp' )
+			. "\n" . ''
+			. "\n" . __( 'RULES:', 'niranzwp' )
+			. "\n" . __( '- No opening <?php tag; a leading one is stripped but do not send it.', 'niranzwp' )
+			. "\n" . __( '- Use return to send a value back. It is captured whole.', 'niranzwp' )
+			. "\n" . __( '- echo and print are captured separately, in "output".', 'niranzwp' )
+			. "\n" . __( '- Warnings, notices and deprecations arrive in "errors", up to 100. A run can succeed and still have raised them, so read that array.', 'niranzwp' )
+			. "\n" . __( '- Never call exit() or die(): it kills the request and the response is lost.', 'niranzwp' )
+			. "\n" . __( '- Thirty second limit. No unbounded loops, and chunk anything that walks a large table.', 'niranzwp' )
+			. "\n" . __( '- Nothing here persists. To leave PHP behind that runs on later requests, write a file.', 'niranzwp' )
+			. "\n" . __( '- The wpdb global, WP_Query, get_option() and every loaded plugin API are available.', 'niranzwp' );
 	}
 
 	/**
