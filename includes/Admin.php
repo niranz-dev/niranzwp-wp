@@ -13,6 +13,9 @@ defined( 'ABSPATH' ) || exit;
 
 final class Admin {
 
+	/** Model Context Protocol mark, simple-icons (CC0). */
+	private const MENU_MARK = 'data:image/svg+xml,%3Csvg%20viewBox%3D%220%200%2024%2024%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M13.85%200a4.16%204.16%200%200%200-2.95%201.217L1.456%2010.66a.835.835%200%200%200%200%201.18.835.835%200%200%200%201.18%200l9.442-9.442a2.49%202.49%200%200%201%203.541%200%202.49%202.49%200%200%201%200%203.541L8.59%2012.97l-.1.1a.835.835%200%200%200%200%201.18.835.835%200%200%200%201.18%200l.1-.098%207.03-7.034a2.49%202.49%200%200%201%203.542%200l.049.05a2.49%202.49%200%200%201%200%203.54l-8.54%208.54a1.96%201.96%200%200%200%200%202.755l1.753%201.753a.835.835%200%200%200%201.18%200%20.835.835%200%200%200%200-1.18l-1.753-1.753a.266.266%200%200%201%200-.394l8.54-8.54a4.185%204.185%200%200%200%200-5.9l-.05-.05a4.16%204.16%200%200%200-2.95-1.218c-.2%200-.401.02-.6.048a4.17%204.17%200%200%200-1.17-3.552A4.16%204.16%200%200%200%2013.85%200m0%203.333a.84.84%200%200%200-.59.245L6.275%2010.56a4.186%204.186%200%200%200%200%205.902%204.186%204.186%200%200%200%205.902%200L19.16%209.48a.835.835%200%200%200%200-1.18.835.835%200%200%200-1.18%200l-6.985%206.984a2.49%202.49%200%200%201-3.54%200%202.49%202.49%200%200%201%200-3.54l6.983-6.985a.835.835%200%200%200%200-1.18.84.84%200%200%200-.59-.245%22/%3E%3C/svg%3E';
+
 	private const SLUG  = 'niranzwp';
 	private const NONCE = 'niranzwp_save';
 	private const TOGGLE_NONCE = 'niranzwp_toggle';
@@ -37,6 +40,37 @@ final class Admin {
 		 * exactly when the bar is about to render and never otherwise.
 		 */
 		add_action( 'wp_before_admin_bar_render', [ self::class, 'bar_styles' ] );
+		// The menu icon has to be styled on every admin screen, not only this
+		// plugin's own, so it cannot ride along with the page styles.
+		add_action( 'admin_head', [ self::class, 'menu_icon' ] );
+	}
+
+	/**
+	 * Put the Model Context Protocol mark in the menu.
+	 *
+	 * The mark is from simple-icons (CC0). It is a mask rather than a
+	 * background image, because WordPress does not recolour a background and
+	 * an icon baked to one grey looks wrong the moment somebody picks a
+	 * different admin colour scheme. As a mask it is painted in currentColor,
+	 * which is already whatever the scheme says an icon should be - and turns
+	 * white on hover and on the current item without anything further.
+	 */
+	public static function menu_icon(): void {
+		?>
+		<style id="niranzwp-menu-icon">
+		#toplevel_page_<?php echo esc_attr( self::SLUG ); ?> .wp-menu-image::before{
+			/* padding:0 is doing real work: core gives this pseudo-element
+			   7px of vertical padding for the dashicons font, and leaving it
+			   in place while adding a margin of our own pushed the mark out
+			   of the row and clipped it. */
+			content:"";display:block;box-sizing:content-box;
+			width:20px;height:20px;padding:0;margin:7px auto 0;line-height:0;
+			background-color:currentColor;
+			-webkit-mask:url(<?php echo self::MENU_MARK; // phpcs:ignore WordPress.Security.EscapeOutput ?>) no-repeat center/20px 20px;
+			mask:url(<?php echo self::MENU_MARK; // phpcs:ignore WordPress.Security.EscapeOutput ?>) no-repeat center/20px 20px;
+		}
+		</style>
+		<?php
 	}
 
 	public static function menu(): void {
@@ -503,6 +537,22 @@ final class Admin {
 	font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
 }
 .nzwp-bar-name{display:flex;align-items:center;gap:12px;min-width:0;overflow:hidden}
+/* The mark sits inside the wordmark rather than beside it, so the two move
+   as one thing at every width. Masked in the wordmark's own white, which is
+   also what the menu icon does - one technique, so the two read as the same
+   object in two places.
+
+   1.18em, not the 1em that looks right on paper: the artwork leaves margin
+   inside its own 24x24 box, so the visible mark is already smaller than its
+   size says, and it is thin strokes standing next to 800-weight caps. Sized
+   in em rather than pixels so it tracks the wordmark down to 16px. */
+.nzwp-mark::before{
+	content:"";display:inline-block;vertical-align:-.26em;
+	width:1.18em;height:1.18em;margin-right:.46em;
+	background-color:currentColor;
+	-webkit-mask:url(<?php echo self::MENU_MARK; // phpcs:ignore WordPress.Security.EscapeOutput ?>) no-repeat center/contain;
+	mask:url(<?php echo self::MENU_MARK; // phpcs:ignore WordPress.Security.EscapeOutput ?>) no-repeat center/contain;
+}
 .nzwp-mark{
 	flex:none;color:#fff;font-weight:800;font-size:18px;letter-spacing:.16em;
 	line-height:1;white-space:nowrap;
@@ -717,18 +767,26 @@ final class Admin {
 }
 .nzwp-wrap .nzwp-dash a:first-child,
 .nzwp-wrap .nzwp-dash div.tile:first-child{border-left:0;padding-left:0}
-/* Nothing to lift, so hover speaks in the only two things left: the figure
-   takes the brand violet and the label darkens. */
-.nzwp-wrap .nzwp-dash a:hover b{color:#5b21b6}
+/* Nothing to lift, so hover speaks by deepening: the figure already carries
+   the masthead's middle stop, and hover walks it to the dark end of the same
+   ramp. Staying inside one ramp is what keeps it reading as emphasis rather
+   than as a different state. */
+.nzwp-wrap .nzwp-dash a:hover b{color:#2e1065}
 .nzwp-wrap .nzwp-dash a:hover span{color:#1d2327}
 .nzwp-wrap .nzwp-dash a:hover b.on{color:#0a5c36}
 .nzwp-wrap .nzwp-dash div.tile{cursor:default}
+/* #5b21b6 is the masthead gradient's middle stop, so the figures read as the
+   same brand as the bar above them without repeating the gradient itself.
+   8.6:1 on white, which it needs to be: these are the only numbers on the
+   page and they get read at a glance rather than studied. */
 .nzwp-wrap .nzwp-dash b{
 	display:block;font-size:38px;font-weight:600;line-height:1.05;
-	letter-spacing:-.03em;color:#1d2327;
+	letter-spacing:-.03em;color:#5b21b6;
 	font-variant-numeric:tabular-nums lining-nums;
 }
-/* Green survives only where it means something: this thing is on now. */
+/* Green survives only where the figure IS the state - the word 'On'. On a
+   count it said the same thing twice, since the label underneath already
+   carries it. */
 .nzwp-wrap .nzwp-dash b.on{color:#0a5c36}
 .nzwp-wrap .nzwp-dash b.off{color:#6b7075}
 /* Caps below the figure, the way a column of figures is labelled. These carry
@@ -1149,7 +1207,10 @@ final class Admin {
 					? __( 'abilities available', 'niranzwp' )
 					: sprintf( __( 'available, %d switched off', 'niranzwp' ), $disabled ),
 				'href'  => admin_url( 'admin.php?page=niranzwp-abilities' ),
-				'tone'  => Settings::active() ? 'on' : 'off',
+				// A count is not a state, so it takes the brand colour like
+				// the other figures. Grey stays, because a number that cannot
+				// currently be used should not look ready.
+				'tone'  => Settings::active() ? '' : 'off',
 			],
 			[
 				'key'   => 'skills',
@@ -1167,10 +1228,13 @@ final class Admin {
 			],
 			[
 				'key'   => 'guard',
-				'value' => $guard ? __( 'Armed', 'niranzwp' ) : __( 'Off', 'niranzwp' ),
+				// 'On' rather than 'Armed': the rest of the plugin says on and off,
+				// and a figure in this row is not the place to introduce a
+				// second vocabulary for the same idea.
+				'value' => $guard ? __( 'On', 'niranzwp' ) : __( 'Off', 'niranzwp' ),
 				'label' => $guard
-					? __( 'recovery guard', 'niranzwp' )
-					: __( 'recovery guard -- on with filesystem', 'niranzwp' ),
+					? __( 'crash recovery', 'niranzwp' )
+					: __( 'crash recovery -- on with filesystem', 'niranzwp' ),
 				'href'  => '',
 				'tone'  => $guard ? 'on' : 'off',
 			],
