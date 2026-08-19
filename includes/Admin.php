@@ -451,7 +451,10 @@ final class Admin {
 }
 /* Stated, not inherited: an admin colour scheme owns bare `a` at (0,1,0)
    and would otherwise repaint this link and kill its hover. */
-.nzwp-stat span a{color:#2271b1;text-decoration:underline;text-underline-offset:2px}
+/* The plugin's own violet rather than the admin scheme's blue, which changes
+   under us. 8.9:1 on white, and underlined so colour is not the only signal. */
+.nzwp-stat span a{color:#5b21b6;text-decoration:underline;text-underline-offset:2px}
+.nzwp-stat span a:hover{color:#4c1d95}
 .nzwp-stat span a:hover{color:#135e96}
 
 /* ==================================================== dashboard tiles === */
@@ -473,17 +476,12 @@ final class Admin {
 	   too narrow but because they were too tall for what they hold - widening
 	   them would have added more of the same space, not less. */
 	display:block;padding:13px 15px;text-decoration:none;
-	color:#1d2327;
-	/* The same violet hairline the figure strip below carries, so the two rows
-	   read as one page rather than two widgets. Drawn as a background layer:
-	   a border-top cannot hold a gradient, and the markup has no spare
-	   element. Sized to sit inside the radius rather than square across it. */
-	background-color:#fff;
-	background-image:linear-gradient(90deg,#5b21b6,#7c3aed);
-	background-repeat:no-repeat;
-	background-size:100% 2px;
-	background-position:left top;
-	border:1px solid #dcdcde;border-radius:8px;
+	/* A tinted surface rather than white. Four white boxes on a grey page have
+	   nothing to hold them together; a single soft violet ties them to the
+	   masthead and separates them from the cards below, which stay white.
+	   Ink on #f6f2fe is 14.8:1, so nothing is spent on legibility. */
+	background:#f6f2fe;color:#1d2327;
+	border:1px solid #e3d9fa;border-radius:8px;
 	/* One pixel of lift, matching wp-admin's own postbox. Any more and the
 	   tile starts competing with the number it holds. */
 	box-shadow:0 1px 1px rgba(0,0,0,.035);
@@ -493,11 +491,7 @@ final class Admin {
    would be the colour scheme's, and a 1px translate needs a reduced-motion
    escape hatch to buy nothing. The guard tile is a div, not a link: nothing
    on it may imply a click. */
-.nzwp-wrap .nzwp-dash a:hover{
-	border-color:#c4b5fd;
-	background-image:linear-gradient(90deg,#4c1d95,#6d28d9);
-	box-shadow:0 2px 6px rgba(76,29,149,.12);
-}
+.nzwp-wrap .nzwp-dash a:hover{background:#f1eafd;border-color:#c4b5fd;box-shadow:0 2px 6px rgba(76,29,149,.12)}
 .nzwp-wrap .nzwp-dash div.tile{cursor:default}
 .nzwp-wrap .nzwp-dash b{
 	display:block;font-size:25px;font-weight:600;line-height:1.1;
@@ -509,8 +503,66 @@ final class Admin {
 /* Was #8c8f94 — 2.9:1 on white, under even the 3:1 large-text floor on a
    number the owner is meant to read. #6f747a is 4.7:1 and still clearly
    the quiet state. */
-.nzwp-wrap .nzwp-dash b.off{color:#6f747a}
-.nzwp-wrap .nzwp-dash span{display:block;margin-top:3px;color:#50575e;font-size:12.5px;line-height:1.4}
+.nzwp-wrap .nzwp-dash b.off{color:#6b7075}
+.nzwp-wrap .nzwp-dash span{display:block;margin-top:3px;color:#4a4f57;font-size:12.5px;line-height:1.4}
+
+/* Each tile gets a mark. Four boxes holding nothing but a figure and a label
+   read as plain no matter how they are spaced, and the row is the first thing
+   on the page. The icons are inline SVG data URIs on a pseudo-element, since
+   the markup has no element to put one in - white strokes on a violet disc, so
+   one file works on any tint. */
+.nzwp-wrap .nzwp-dash a,
+.nzwp-wrap .nzwp-dash div.tile{position:relative;padding-right:56px}
+.nzwp-wrap .nzwp-dash a::after,
+.nzwp-wrap .nzwp-dash div.tile::after{
+	content:"";
+	position:absolute;top:13px;right:13px;
+	width:30px;height:30px;border-radius:9px;
+	background-color:#6d28d9;
+	background-image:linear-gradient(180deg,#7c3aed,#5b21b6);
+	background-repeat:no-repeat;
+	background-position:center;
+	background-size:16px 16px;
+	box-shadow:0 1px 2px rgba(76,29,149,.30),inset 0 1px 0 rgba(255,255,255,.22);
+	transition:transform .14s ease;
+}
+/* The disc turns green on the two tiles that report a live "on" state, so the
+   colour agrees with the figure beside it rather than contradicting it. */
+.nzwp-wrap .nzwp-dash a:has(b.on)::after,
+.nzwp-wrap .nzwp-dash div.tile:has(b.on)::after{
+	background-color:#0e7a53;
+	background-image:linear-gradient(180deg,#12946a,#0b6042);
+	box-shadow:0 1px 2px rgba(10,92,54,.30),inset 0 1px 0 rgba(255,255,255,.22);
+}
+.nzwp-wrap .nzwp-dash a:has(b.off)::after,
+.nzwp-wrap .nzwp-dash div.tile:has(b.off)::after{
+	background-color:#8c8f94;
+	background-image:linear-gradient(180deg,#9ea1a6,#7c8085);
+	box-shadow:0 1px 2px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.22);
+}
+.nzwp-wrap .nzwp-dash a:hover::after{transform:translateY(-1px)}
+@media (prefers-reduced-motion: reduce){
+	.nzwp-wrap .nzwp-dash a:hover::after{transform:none}
+}
+.nzwp-wrap .nzwp-dash .t-abilities::after{background-image:linear-gradient(180deg,#7c3aed,#5b21b6),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='7' height='7' rx='1.5'/%3E%3Crect x='14' y='3' width='7' height='7' rx='1.5'/%3E%3Crect x='3' y='14' width='7' height='7' rx='1.5'/%3E%3Crect x='14' y='14' width='7' height='7' rx='1.5'/%3E%3C/svg%3E")}
+.nzwp-wrap .nzwp-dash .t-skills::after{background-image:linear-gradient(180deg,#7c3aed,#5b21b6),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5z'/%3E%3Cpath d='M9 7.5h6'/%3E%3Cpath d='M9 11h4'/%3E%3C/svg%3E")}
+.nzwp-wrap .nzwp-dash .t-checkpoints::after{background-image:linear-gradient(180deg,#7c3aed,#5b21b6),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12a9 9 0 1 0 3-6.7'/%3E%3Cpath d='M3 4v5h5'/%3E%3Cpath d='M12 8v4l3 2'/%3E%3C/svg%3E")}
+.nzwp-wrap .nzwp-dash .t-guard::after{background-image:linear-gradient(180deg,#7c3aed,#5b21b6),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l7 3v5.5c0 4.3-2.9 8.2-7 9.5-4.1-1.3-7-5.2-7-9.5V6z'/%3E%3Cpath d='M9 12l2 2 4-4'/%3E%3C/svg%3E")}
+/* The gradient is repeated in each of the four rules above because a longhand
+   background-image replaces the shorthand wholesale; the tint rules that
+   follow re-state it again for the same reason. */
+.nzwp-wrap .nzwp-dash a:has(b.on).t-abilities::after{background-image:linear-gradient(180deg,#12946a,#0b6042),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='7' height='7' rx='1.5'/%3E%3Crect x='14' y='3' width='7' height='7' rx='1.5'/%3E%3Crect x='3' y='14' width='7' height='7' rx='1.5'/%3E%3Crect x='14' y='14' width='7' height='7' rx='1.5'/%3E%3C/svg%3E")}
+.nzwp-wrap .nzwp-dash div.tile:has(b.on).t-guard::after{background-image:linear-gradient(180deg,#12946a,#0b6042),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l7 3v5.5c0 4.3-2.9 8.2-7 9.5-4.1-1.3-7-5.2-7-9.5V6z'/%3E%3Cpath d='M9 12l2 2 4-4'/%3E%3C/svg%3E")}
+.nzwp-wrap .nzwp-dash a:has(b.off).t-abilities::after{background-image:linear-gradient(180deg,#9ea1a6,#7c8085),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='7' height='7' rx='1.5'/%3E%3Crect x='14' y='3' width='7' height='7' rx='1.5'/%3E%3Crect x='3' y='14' width='7' height='7' rx='1.5'/%3E%3Crect x='14' y='14' width='7' height='7' rx='1.5'/%3E%3C/svg%3E")}
+.nzwp-wrap .nzwp-dash div.tile:has(b.off).t-guard::after{background-image:linear-gradient(180deg,#9ea1a6,#7c8085),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l7 3v5.5c0 4.3-2.9 8.2-7 9.5-4.1-1.3-7-5.2-7-9.5V6z'/%3E%3Cpath d='M9 12l2 2 4-4'/%3E%3C/svg%3E")}
+/* :has() is unsupported in older Safari and Firefox ESR; those get the violet
+   disc, which is correct-looking rather than wrong. Nothing depends on it. */
+@media(max-width:782px){
+	.nzwp-wrap .nzwp-dash a,
+	.nzwp-wrap .nzwp-dash div.tile{padding-right:52px}
+	.nzwp-wrap .nzwp-dash a::after,
+	.nzwp-wrap .nzwp-dash div.tile::after{width:26px;height:26px;background-size:14px 14px;top:12px;right:12px}
+}
 
 /* ============================================================== cards === */
 
@@ -598,7 +650,7 @@ final class Admin {
 	/* Shell commands and JSON are LTR even on an RTL admin. */
 	direction:ltr;text-align:left;
 }
-.nzwp-code::selection,.nzwp-code ::selection{background:#3858e9;color:#fff}
+.nzwp-code::selection,.nzwp-code ::selection{background:#6d28d9;color:#fff}
 /* The title bar. position:sticky rather than absolute so it stays across the
    full scroll width of a long line instead of ending at the visible edge. */
 .nzwp-code::before{
@@ -822,6 +874,7 @@ final class Admin {
 
 		$tiles = [
 			[
+				'key'   => 'abilities',
 				'value' => (string) $abilities,
 				'label' => 0 === $disabled
 					? __( 'abilities exposed', 'niranzwp' )
@@ -830,18 +883,21 @@ final class Admin {
 				'tone'  => Settings::active() ? 'on' : 'off',
 			],
 			[
+				'key'   => 'skills',
 				'value' => (string) $skills,
 				'label' => __( 'skills available', 'niranzwp' ),
 				'href'  => admin_url( 'admin.php?page=niranzwp-skills' ),
 				'tone'  => '',
 			],
 			[
+				'key'   => 'checkpoints',
 				'value' => (string) $points,
 				'label' => __( 'checkpoints kept', 'niranzwp' ),
 				'href'  => admin_url( 'admin.php?page=niranzwp-checkpoints' ),
 				'tone'  => '',
 			],
 			[
+				'key'   => 'guard',
 				'value' => $guard ? __( 'Armed', 'niranzwp' ) : __( 'Off', 'niranzwp' ),
 				'label' => $guard
 					? __( 'recovery guard', 'niranzwp' )
@@ -854,12 +910,12 @@ final class Admin {
 		<div class="nzwp-dash">
 			<?php foreach ( $tiles as $t ) : ?>
 				<?php if ( '' !== $t['href'] ) : ?>
-					<a href="<?php echo esc_url( $t['href'] ); ?>">
+					<a class="t-<?php echo esc_attr( $t['key'] ); ?>" href="<?php echo esc_url( $t['href'] ); ?>">
 						<b class="<?php echo esc_attr( $t['tone'] ); ?>"><?php echo esc_html( $t['value'] ); ?></b>
 						<span><?php echo esc_html( $t['label'] ); ?></span>
 					</a>
 				<?php else : ?>
-					<div class="tile">
+					<div class="tile t-<?php echo esc_attr( $t['key'] ); ?>">
 						<b class="<?php echo esc_attr( $t['tone'] ); ?>"><?php echo esc_html( $t['value'] ); ?></b>
 						<span><?php echo esc_html( $t['label'] ); ?></span>
 					</div>
