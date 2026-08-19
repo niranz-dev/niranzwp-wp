@@ -41,16 +41,16 @@ final class Admin {
 
 	public static function menu(): void {
 		add_menu_page( 'NiranzWP', 'NiranzWP', CAPABILITY, self::SLUG, [ self::class, 'render_configuration' ], 'dashicons-rest-api', 76 );
-		add_submenu_page( self::SLUG, __( 'Configuration', 'niranzwp' ), __( 'Configuration', 'niranzwp' ), CAPABILITY, self::SLUG, [ self::class, 'render_configuration' ] );
-		add_submenu_page( self::SLUG, __( 'Connections', 'niranzwp' ), __( 'Connections', 'niranzwp' ), CAPABILITY, self::SLUG . '-connections', [ Connections::class, 'render' ] );
-		add_submenu_page( self::SLUG, __( 'Abilities Hub', 'niranzwp' ), __( 'Abilities Hub', 'niranzwp' ), CAPABILITY, self::SLUG . '-abilities', [ Hub::class, 'render' ] );
-		add_submenu_page( self::SLUG, __( 'Context', 'niranzwp' ), __( 'Context', 'niranzwp' ), CAPABILITY, self::SLUG . '-context', [ ContextAdmin::class, 'render' ] );
-		add_submenu_page( self::SLUG, __( 'Skills', 'niranzwp' ), __( 'Skills', 'niranzwp' ), CAPABILITY, self::SLUG . '-skills', [ SkillsAdmin::class, 'render' ] );
-		add_submenu_page( self::SLUG, __( 'Checkpoints', 'niranzwp' ), __( 'Checkpoints', 'niranzwp' ), CAPABILITY, self::SLUG . '-checkpoints', [ CheckpointAdmin::class, 'render' ] );
-		add_submenu_page( self::SLUG, __( 'Troubleshoot', 'niranzwp' ), __( 'Troubleshoot', 'niranzwp' ), CAPABILITY, self::SLUG . '-troubleshoot', [ self::class, 'render_troubleshoot' ] );
+		self::no_frames( add_submenu_page( self::SLUG, __( 'Configuration', 'niranzwp' ), __( 'Configuration', 'niranzwp' ), CAPABILITY, self::SLUG, [ self::class, 'render_configuration' ] ) );
+		self::no_frames( add_submenu_page( self::SLUG, __( 'Connections', 'niranzwp' ), __( 'Connections', 'niranzwp' ), CAPABILITY, self::SLUG . '-connections', [ Connections::class, 'render' ] ) );
+		self::no_frames( add_submenu_page( self::SLUG, __( 'Abilities Hub', 'niranzwp' ), __( 'Abilities Hub', 'niranzwp' ), CAPABILITY, self::SLUG . '-abilities', [ Hub::class, 'render' ] ) );
+		self::no_frames( add_submenu_page( self::SLUG, __( 'Context', 'niranzwp' ), __( 'Context', 'niranzwp' ), CAPABILITY, self::SLUG . '-context', [ ContextAdmin::class, 'render' ] ) );
+		self::no_frames( add_submenu_page( self::SLUG, __( 'Skills', 'niranzwp' ), __( 'Skills', 'niranzwp' ), CAPABILITY, self::SLUG . '-skills', [ SkillsAdmin::class, 'render' ] ) );
+		self::no_frames( add_submenu_page( self::SLUG, __( 'Checkpoints', 'niranzwp' ), __( 'Checkpoints', 'niranzwp' ), CAPABILITY, self::SLUG . '-checkpoints', [ CheckpointAdmin::class, 'render' ] ) );
+		self::no_frames( add_submenu_page( self::SLUG, __( 'Troubleshoot', 'niranzwp' ), __( 'Troubleshoot', 'niranzwp' ), CAPABILITY, self::SLUG . '-troubleshoot', [ self::class, 'render_troubleshoot' ] ) );
 		// The device-code screen. Registered under a null parent so it has a URL
 		// to send someone to without adding a menu row nobody navigates to.
-		add_submenu_page( null, __( 'Connect a tool', 'niranzwp' ), __( 'Connect a tool', 'niranzwp' ), CAPABILITY, self::SLUG . '-connect', [ self::class, 'render_connect' ] );
+		self::no_frames( add_submenu_page( null, __( 'Connect a tool', 'niranzwp' ), __( 'Connect a tool', 'niranzwp' ), CAPABILITY, self::SLUG . '-connect', [ self::class, 'render_connect' ] ) );
 	}
 
 	/**
@@ -62,6 +62,43 @@ final class Admin {
 	 * auto-submit a code arriving in the URL - a link someone was sent should
 	 * not be able to approve itself.
 	 */
+	/**
+	 * Refuse to be drawn inside somebody else's page.
+	 *
+	 * This screen has a button that grants a stranger's terminal everything the
+	 * person clicking it can do, and the code being approved arrives in the URL.
+	 * Framed invisibly over a page the attacker controls, with their own code
+	 * already filled in, that button can be clicked by an administrator who
+	 * believes they are clicking something else.
+	 *
+	 * The nonce does not help. Clickjacking does not forge a request - it borrows
+	 * a real one, from the real user, in their real session, and every check
+	 * passes because nothing about it is false except the intent.
+	 *
+	 * WordPress sends X-Frame-Options on the login screen and nowhere else, so
+	 * these screens have to say it for themselves. Both headers: the old one for
+	 * old browsers, frame-ancestors for the rest.
+	 *
+	 * On load-{hook}, not inside the render callback. admin.php has already
+	 * printed the opening of the document by the time a callback runs, so
+	 * headers sent from there are sent to nobody - which is what the first
+	 * version of this did, silently, and a test is the only reason anyone knows.
+	 */
+	private static function no_frames( $hook ): void {
+		if ( is_string( $hook ) && '' !== $hook ) {
+			add_action( 'load-' . $hook, [ self::class, 'deny_framing' ] );
+		}
+	}
+
+	public static function deny_framing(): void {
+		if ( headers_sent() ) {
+			return;
+		}
+		header( 'X-Frame-Options: DENY' );
+		header( "Content-Security-Policy: frame-ancestors 'none'" );
+		header( 'Referrer-Policy: strict-origin-when-cross-origin' );
+	}
+
 	public static function render_connect(): void {
 		self::header( __( 'Connect a tool', 'niranzwp' ) );
 

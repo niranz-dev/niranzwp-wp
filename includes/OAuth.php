@@ -43,6 +43,39 @@ final class OAuth {
 	private const MAX_CLIENTS  = 50;
 	private const MAX_TOKENS   = 20;
 
+	/*
+	 * Rotation needs two different answers to the same question - somebody is
+	 * presenting a refresh token that has already been used.
+	 *
+	 * Almost always that is the honest client asking again because it never
+	 * received the reply: the connection dropped, a proxy ate the response, the
+	 * process was killed between the write and the read. The server rotated,
+	 * the client still holds the old token, and destroying it on arrival locks
+	 * that client out permanently over one lost packet. GRACE is how long a
+	 * second attempt is read that way.
+	 *
+	 * After that it is read as theft, which is the whole reason to rotate: two
+	 * parties hold one token and only one of them should. REUSE_WINDOW is how
+	 * long a spent token is remembered so that can be noticed at all - past it
+	 * the record is gone and the token is merely unknown.
+	 */
+	private const ROTATION_GRACE = 120;   // two minutes
+	private const REUSE_WINDOW   = 86400; // one day
+	private const LAST_USED_RESOLUTION = 60;
+
+	/*
+	 * Two endpoints have to be open to strangers - a client cannot register
+	 * itself or ask for a code while holding a credential it does not have yet.
+	 * Open and unmetered are different things. Each device request writes two
+	 * transients that live ten minutes, so a script left running fills the
+	 * options table of a site whose owner never connected anything.
+	 *
+	 * Counted per address per hour. Generous enough that a person retrying, or
+	 * an office behind one address, never meets it.
+	 */
+	private const THROTTLE_WINDOW = 3600;
+	private const THROTTLE_MAX    = 30;
+
 	/**
 	 * The user code alphabet.
 	 *
@@ -118,6 +151,12 @@ final class OAuth {
 	 * grant of access still goes through a person approving a code in wp-admin.
 	 */
 	public static function register_client( \WP_REST_Request $r ) {
+		if ( ! self::transport_is_safe() ) {
+			return self::insecure_transport();
+		}
+		if ( self::throttled() ) {
+			return self::error( 'slow_down', 'Too many requests from this address. Try again later.', 429 );
+		}
 		if ( ! Settings::active() ) {
 			return self::error( 'access_denied', 'Abilities are switched off on this site.', 403 );
 		}
@@ -127,11 +166,38 @@ final class OAuth {
 
 		$clients = self::clients();
 
-		// A registration endpoint anyone can post to is a row-creation endpoint
-		// anyone can post to. The cap is the backstop; the oldest go first so a
-		// real client is never locked out by junk.
+		/*
+		 * A registration endpoint anyone can post to is a row-creation endpoint
+		 * anyone can post to, so it is capped. Dropping the oldest to make room
+		 * was the wrong end to drop from: a stranger could register fifty times
+		 * and push out the registration a working client was still polling
+		 * under, breaking a connection nobody touched.
+		 *
+		 * Registrations that no longer have a token behind them go first, newest
+		 * of those before oldest, so what is discarded is whatever was least
+		 * likely to be in use. If everything is in use, the endpoint refuses
+		 * rather than choosing a victim.
+		 */
 		if ( count( $clients ) >= self::MAX_CLIENTS ) {
-			$clients = array_slice( $clients, -( self::MAX_CLIENTS - 10 ), null, true );
+			$in_use = self::clients_with_tokens();
+			$idle   = array_reverse(
+				array_filter(
+					$clients,
+					static fn( string $id ): bool => ! isset( $in_use[ $id ] ),
+					ARRAY_FILTER_USE_KEY
+				),
+				true
+			);
+			if ( ! $idle ) {
+				return self::error(
+					'temporarily_unavailable',
+					'This site has as many registered clients as it will hold. Revoke one on the Connections screen.',
+					503
+				);
+			}
+			foreach ( array_slice( array_keys( $idle ), 0, 10 ) as $drop ) {
+				unset( $clients[ $drop ] );
+			}
 		}
 
 		$client_id = 'nzwp_' . bin2hex( random_bytes( 16 ) );
@@ -168,6 +234,12 @@ final class OAuth {
 	 * during its ten minutes.
 	 */
 	public static function device_authorize( \WP_REST_Request $r ) {
+		if ( ! self::transport_is_safe() ) {
+			return self::insecure_transport();
+		}
+		if ( self::throttled() ) {
+			return self::error( 'slow_down', 'Too many requests from this address. Try again later.', 429 );
+		}
 		if ( ! Settings::active() ) {
 			return self::error( 'access_denied', 'Abilities are switched off on this site.', 403 );
 		}
@@ -189,9 +261,19 @@ final class OAuth {
 		];
 
 		set_transient( self::device_key( $device_code ), $record, self::DEVICE_TTL );
-		// The typed code has to find the request; it is the only thing the
-		// person carries between the terminal and the browser.
-		set_transient( self::code_key( $user_code ), $device_code, self::DEVICE_TTL );
+		/*
+		 * The typed code has to find the request - it is the only thing the
+		 * person carries between the terminal and the browser - but it must not
+		 * carry the device code itself. Storing that here put the plaintext of
+		 * the credential the client polls with into the options table, where a
+		 * database read through somebody else's plugin, or an old backup, would
+		 * hand it over.
+		 *
+		 * What is stored is the hash. approve() only needs to find the record,
+		 * and it can find it by that; redeeming still requires the plaintext,
+		 * which only the client that asked for it ever had.
+		 */
+		set_transient( self::code_key( $user_code ), self::device_key( $device_code ), self::DEVICE_TTL );
 
 		return new \WP_REST_Response(
 			[
@@ -213,13 +295,13 @@ final class OAuth {
 	 * unauthenticated bookkeeping, and everything after it acts as this user.
 	 */
 	public static function approve( string $user_code, int $user_id ): bool {
-		$user_code   = self::normalise_code( $user_code );
-		$device_code = get_transient( self::code_key( $user_code ) );
-		if ( ! is_string( $device_code ) || '' === $device_code ) {
+		$user_code = self::normalise_code( $user_code );
+		$key       = get_transient( self::code_key( $user_code ) );
+		if ( ! is_string( $key ) || '' === $key ) {
 			return false;
 		}
 
-		$record = get_transient( self::device_key( $device_code ) );
+		$record = get_transient( $key );
 		if ( ! is_array( $record ) ) {
 			return false;
 		}
@@ -230,7 +312,7 @@ final class OAuth {
 		// Whatever is left of the original ten minutes, not a fresh ten: the
 		// window is for the person to approve in, and it has just been used.
 		$left = max( 30, self::DEVICE_TTL - ( time() - (int) $record['created'] ) );
-		set_transient( self::device_key( $device_code ), $record, $left );
+		set_transient( $key, $record, $left );
 		delete_transient( self::code_key( $user_code ) );
 
 		return true;
@@ -238,11 +320,11 @@ final class OAuth {
 
 	/** What the admin screen shows before asking anyone to approve anything. */
 	public static function pending( string $user_code ): ?array {
-		$device_code = get_transient( self::code_key( self::normalise_code( $user_code ) ) );
-		if ( ! is_string( $device_code ) ) {
+		$key = get_transient( self::code_key( self::normalise_code( $user_code ) ) );
+		if ( ! is_string( $key ) ) {
 			return null;
 		}
-		$record = get_transient( self::device_key( $device_code ) );
+		$record = get_transient( $key );
 		if ( ! is_array( $record ) ) {
 			return null;
 		}
@@ -256,6 +338,9 @@ final class OAuth {
 	/* ---------------------------------------------------------------- token */
 
 	public static function token( \WP_REST_Request $r ) {
+		if ( ! self::transport_is_safe() ) {
+			return self::insecure_transport();
+		}
 		$grant = (string) $r->get_param( 'grant_type' );
 
 		if ( 'urn:ietf:params:oauth:grant-type:device_code' === $grant ) {
@@ -314,11 +399,31 @@ final class OAuth {
 			return self::error( 'invalid_grant', 'That user can no longer manage this site.', 403 );
 		}
 
-		// Rotate. A refresh token that survives its own use is a credential with
-		// no expiry wearing a different hat.
-		self::forget_token( $user_id, $index );
+		$family  = (string) ( $record['family'] ?? '' );
+		$retired = (int) ( $record['retired'] ?? 0 );
 
-		return self::issue( $user_id, $client_id );
+		if ( $retired > 0 ) {
+			if ( $retired + self::ROTATION_GRACE < time() ) {
+				// Long after any honest retry would have given up. Two parties
+				// hold this token; the site cannot tell which is the client, so
+				// it trusts neither and takes the whole chain down. The user
+				// logs in again, and whoever stole it gets nothing.
+				self::forget_family( $user_id, $family );
+				return self::error(
+					'invalid_grant',
+					'That refresh token was already used. Every token from this connection has been revoked - sign in again.',
+					400
+				);
+			}
+			// Inside the window: the client never saw the last reply. Answer it.
+		}
+
+		// Rotate. A refresh token that survives its own use is a credential with
+		// no expiry wearing a different hat - so it is spent here, and only
+		// remembered long enough to recognise it coming back.
+		self::retire_token( $user_id, $index );
+
+		return self::issue( $user_id, $client_id, $family );
 	}
 
 	/**
@@ -327,7 +432,11 @@ final class OAuth {
 	 * Same reasoning as WordPress's own application passwords: the site never
 	 * needs the plaintext again, so it should not be able to hand it over.
 	 */
-	private static function issue( int $user_id, string $client_id ) {
+	private static function issue( int $user_id, string $client_id, string $family = '' ) {
+		if ( '' === $family ) {
+			$family = bin2hex( random_bytes( 16 ) );
+		}
+
 		$access  = bin2hex( random_bytes( 32 ) );
 		$refresh = bin2hex( random_bytes( 32 ) );
 
@@ -346,6 +455,7 @@ final class OAuth {
 
 		$tokens[] = [
 			'client_id'       => $client_id,
+			'family'          => $family,
 			'access'          => hash( 'sha256', $access ),
 			'refresh'         => hash( 'sha256', $refresh ),
 			'access_expires'  => $now + self::ACCESS_TTL,
@@ -384,6 +494,22 @@ final class OAuth {
 			return $user_id; // Something already authenticated this request.
 		}
 
+		/*
+		 * The switch has to hold here, not only over the abilities.
+		 *
+		 * A bearer token does not merely reach this plugin - it makes the
+		 * request an administrator, and everything WordPress exposes answers to
+		 * that: posts, users, media, plugins. Gating the abilities alone would
+		 * leave "off" meaning "our features are off, the credential still opens
+		 * the site", which is not what anyone reads it as.
+		 *
+		 * active() also covers the domain lock, so a copy of this database
+		 * restored somewhere else does not arrive with working credentials.
+		 */
+		if ( ! Settings::active() ) {
+			return $user_id;
+		}
+
 		$header = '';
 		foreach ( [ 'HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION' ] as $key ) {
 			if ( ! empty( $_SERVER[ $key ] ) ) {
@@ -414,12 +540,25 @@ final class OAuth {
 			return $user_id;
 		}
 
-		// Cheap enough to be worth having on the Connections screen, and the
-		// only way to tell a live client from an abandoned one.
-		$tokens = self::tokens( $owner );
-		if ( isset( $tokens[ $index ] ) ) {
-			$tokens[ $index ]['last_used'] = time();
-			update_user_meta( $owner, self::TOKEN_META, $tokens );
+		/*
+		 * Worth having on the Connections screen - it is the only way to tell a
+		 * live client from an abandoned one - but not worth a database write per
+		 * request. An agent working through a site makes hundreds, and every one
+		 * of them read this whole array, changed a number and wrote it back over
+		 * the same row that rotation uses. Two overlapping requests could put
+		 * back a copy taken before the other's change, which for a refresh
+		 * meant a spent token returning to life.
+		 *
+		 * A minute's resolution is all the screen shows, so a minute is all it
+		 * costs.
+		 */
+		$now = time();
+		if ( $now - (int) ( $record['last_used'] ?? 0 ) >= self::LAST_USED_RESOLUTION ) {
+			$tokens = self::tokens( $owner );
+			if ( isset( $tokens[ $index ] ) && hash_equals( (string) ( $tokens[ $index ]['access'] ?? '' ), (string) $record['access'] ) ) {
+				$tokens[ $index ]['last_used'] = $now;
+				update_user_meta( $owner, self::TOKEN_META, $tokens );
+			}
 		}
 
 		return $owner;
@@ -541,6 +680,47 @@ final class OAuth {
 		return null;
 	}
 
+	/**
+	 * Spend a refresh token without forgetting it.
+	 *
+	 * The record stays so a second presentation can be told apart from a token
+	 * the site never issued, which is the difference between a dropped response
+	 * and a stolen credential. Shortening its expiry rather than adding another
+	 * sweep means the existing cleanup in issue() removes it on its own.
+	 */
+	private static function retire_token( int $user_id, int $index ): void {
+		$tokens = self::tokens( $user_id );
+		if ( ! isset( $tokens[ $index ] ) ) {
+			return;
+		}
+		$now                                   = time();
+		$tokens[ $index ]['retired']           = $now;
+		$tokens[ $index ]['refresh_expires']   = $now + self::REUSE_WINDOW;
+		$tokens[ $index ]['access_expires']    = min(
+			(int) ( $tokens[ $index ]['access_expires'] ?? 0 ),
+			$now + self::ROTATION_GRACE
+		);
+		update_user_meta( $user_id, self::TOKEN_META, array_values( $tokens ) );
+	}
+
+	/**
+	 * Revoke every token descended from one approval.
+	 *
+	 * Rotation only detects a theft; it does not end it. The thief holds a pair
+	 * minted from the same grant, so cutting the presented token alone leaves
+	 * them connected.
+	 */
+	private static function forget_family( int $user_id, string $family ): void {
+		if ( '' === $family ) {
+			return;
+		}
+		$tokens = array_values( array_filter(
+			self::tokens( $user_id ),
+			static fn( array $t ): bool => ( $t['family'] ?? '' ) !== $family
+		) );
+		update_user_meta( $user_id, self::TOKEN_META, $tokens );
+	}
+
 	private static function forget_token( int $user_id, int $index ): void {
 		$tokens = self::tokens( $user_id );
 		unset( $tokens[ $index ] );
@@ -563,6 +743,96 @@ final class OAuth {
 	public static function normalise_code( string $code ): string {
 		$code = strtoupper( preg_replace( '/[^A-Za-z0-9]/', '', $code ) ?? '' );
 		return 8 === strlen( $code ) ? substr( $code, 0, 4 ) . '-' . substr( $code, 4 ) : $code;
+	}
+
+	/**
+	 * Has this address had enough for now?
+	 *
+	 * Deliberately not an authoritative counter: transients can be evicted and
+	 * a determined attacker has more than one address. It is here to stop the
+	 * cheap, loud case - one script, one address, no reason - without ever
+	 * standing between a real person and their own site.
+	 */
+	/** client_ids that still have a token behind them, so they are not evicted. */
+	/**
+	 * Is this connection safe to put a credential on?
+	 *
+	 * Everything here - the device code, the access token, the refresh token -
+	 * is a bearer credential, which is to say whoever reads it off the wire owns
+	 * it. Over plain HTTP that is anyone between the client and the site, and no
+	 * amount of care at either end changes it.
+	 *
+	 * Loopback and the usual local development hostnames are allowed, because a
+	 * request that never leaves the machine has no wire to read, and refusing
+	 * would mean nobody could develop against this.
+	 */
+	private static function transport_is_safe(): bool {
+		if ( is_ssl() ) {
+			return true;
+		}
+
+		$host = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
+
+		if ( in_array( $host, [ 'localhost', '127.0.0.1', '::1' ], true ) ) {
+			return true;
+		}
+		foreach ( [ '.local', '.test', '.localhost', '.internal' ] as $suffix ) {
+			if ( str_ends_with( $host, $suffix ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private static function insecure_transport(): \WP_REST_Response {
+		return self::error(
+			'invalid_request',
+			'This site is served over plain HTTP. Tokens are bearer credentials and would be readable by anything on the network, so none will be issued. Serve the site over HTTPS.',
+			400
+		);
+	}
+
+	private static function clients_with_tokens(): array {
+		$in_use = [];
+		$users  = get_users( [
+			'meta_key'     => self::TOKEN_META,
+			'meta_compare' => 'EXISTS',
+			'fields'       => 'ID',
+			'number'       => 100,
+		] );
+		$now = time();
+		foreach ( $users as $uid ) {
+			foreach ( self::tokens( (int) $uid ) as $t ) {
+				if ( (int) ( $t['refresh_expires'] ?? 0 ) > $now && ! empty( $t['client_id'] ) ) {
+					$in_use[ (string) $t['client_id'] ] = true;
+				}
+			}
+		}
+		return $in_use;
+	}
+
+	private static function throttled(): bool {
+		$ip = '';
+		foreach ( [ 'HTTP_CF_CONNECTING_IP', 'HTTP_X_REAL_IP', 'REMOTE_ADDR' ] as $k ) {
+			if ( ! empty( $_SERVER[ $k ] ) ) {
+				$candidate = trim( explode( ',', (string) $_SERVER[ $k ] )[0] );
+				if ( filter_var( $candidate, FILTER_VALIDATE_IP ) ) {
+					$ip = $candidate;
+					break;
+				}
+			}
+		}
+		if ( '' === $ip ) {
+			return false; // Nothing to count against; refusing everyone is worse.
+		}
+
+		$key   = 'nzwp_thr_' . hash( 'sha256', $ip );
+		$count = (int) get_transient( $key );
+		if ( $count >= self::THROTTLE_MAX ) {
+			return true;
+		}
+		set_transient( $key, $count + 1, self::THROTTLE_WINDOW );
+		return false;
 	}
 
 	private static function device_key( string $device_code ): string {
