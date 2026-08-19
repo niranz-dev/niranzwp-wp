@@ -165,7 +165,7 @@ final class Admin {
 		] );
 
 		$rows = [
-			'abilities' => [ __( 'Abilities', 'niranzwp' ), true ],
+			'abilities' => [ __( 'AI abilities', 'niranzwp' ), true ],
 			'files'     => [ __( 'File writes', 'niranzwp' ), $files ],
 			'runtime'   => [ __( 'PHP runtime', 'niranzwp' ), $runtime ],
 		];
@@ -211,7 +211,7 @@ final class Admin {
 		$bar->add_node( [
 			'id'     => 'niranzwp-toggle',
 			'parent' => 'niranzwp-on',
-			'title'  => esc_html__( 'Turn off abilities', 'niranzwp' ),
+			'title'  => esc_html__( 'Turn off AI abilities', 'niranzwp' ),
 			'href'   => wp_nonce_url(
 				admin_url( 'admin-post.php?action=niranzwp_toggle' ),
 				self::TOGGLE_NONCE
@@ -229,9 +229,11 @@ final class Admin {
 	/**
 	 * One-click off from the admin bar.
 	 *
-	 * Called "abilities" here and everywhere else. The AI prefix said less than
-	 * it looked: the CLI reaches the same surface without an AI anywhere in the
-	 * path, and WordPress's own API calls them abilities.
+	 * Called "AI abilities" wherever the switch itself is named. The prefix
+	 * carries the thing an owner needs to know before flipping it - what is
+	 * being let in - and every client on the Connect list is an AI tool. The
+	 * bare "abilities" is kept for counts, where the question is how many
+	 * rather than who for.
 	 *
 	 * Only ever switches off. Turning this back on means going to the settings
 	 * page and seeing what else is being enabled alongside it, which is not
@@ -1001,14 +1003,14 @@ final class Admin {
 		?>
 
 		<div class="nzwp-card">
-			<h2><span class="nzwp-num">1</span><?php esc_html_e( 'Enable abilities', 'niranzwp' ); ?></h2>
+			<h2><span class="nzwp-num">1</span><?php esc_html_e( 'Enable AI abilities', 'niranzwp' ); ?></h2>
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 				<input type="hidden" name="action" value="niranzwp_save">
 				<?php wp_nonce_field( self::NONCE ); ?>
 				<p>
 					<input type="checkbox" name="enabled" id="nzwp-enabled" value="1" autocomplete="off" style="position:relative;z-index:1" <?php checked( $enabled ); ?>>
 					<label for="nzwp-enabled" style="cursor:pointer;font-weight:600">
-						<?php esc_html_e( 'Allow connected clients to use this site\'s abilities', 'niranzwp' ); ?>
+						<?php esc_html_e( 'Allow connected AI clients to use this site\'s abilities', 'niranzwp' ); ?>
 					</label>
 				</p>
 				<p class="nzwp-desc">
