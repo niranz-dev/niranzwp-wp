@@ -68,6 +68,9 @@ const INPUTS = {
 	'niranzwp/elementor-read': { id: '@elementor', depth: 2 },
 	'niranzwp/elementor-find': { id: '@elementor', widget_type: 'heading' },
 	'niranzwp/elementor-update-setting': '@roundtrip',
+	// Both are exercised for real below, on a page this sweep creates.
+	'niranzwp/elementor-write': '@roundtrip',
+	'niranzwp/elementor-move': '@roundtrip',
 	'niranzwp/elementor-widgets': {},
 	'niranzwp/elementor-widget': { name: 'heading' },
 	// Both settings scopes are read. Writing either is left alone: the site
@@ -264,6 +267,100 @@ for (const name of discovered) {
 			});
 
 			await cli(['post', 'delete', id, '--force', '--yes']);
+		}
+	}
+
+	/* ------------------------------------ elementor-write and elementor-move */
+	{
+		const status = json(await cli(['run', 'niranzwp/elementor-status']));
+		if (!status?.active) {
+			for (const name of ['niranzwp/elementor-write', 'niranzwp/elementor-move']) {
+				results.push({ name, status: 'env', detail: 'Elementor is not active on this site.' });
+			}
+		} else {
+			const made = await cli(['post', 'create', '--title', 'sweep elementor target', '--yes']);
+			const id = made.out.match(/created post (\d+)/)?.[1];
+
+			if (!id) {
+				for (const name of ['niranzwp/elementor-write', 'niranzwp/elementor-move']) {
+					results.push({ name, status: 'FAIL', detail: 'could not create a post to write to' });
+				}
+			} else {
+				const heading = (title) => ({
+					elType: 'widget', widgetType: 'heading', settings: { title },
+				});
+
+				// A layout written from nothing: the post has never been in the
+				// editor, so this also covers the meta that makes it one.
+				const wrote = json(await cli(['run', 'niranzwp/elementor-write', '--input', JSON.stringify({
+					id: +id, mode: 'replace-page', dry_run: false,
+					elements: [{ elType: 'container', settings: {}, elements: [heading('one'), heading('two'), heading('three')] }],
+				}), '--yes']));
+
+				const after = json(await cli(['run', 'niranzwp/elementor-read', '--input', JSON.stringify({ id: +id, depth: 3 })]));
+				// elementor-read summarises rather than echoing: a widget's title
+				// comes back as `label`, not inside settings.
+				const titles = (r) => (r?.elements?.[0]?.elements ?? []).map((e) => e.label).join('|');
+				const built = wrote?.status === 'written' && titles(after) === 'one|two|three';
+				const adopted = after?.edit_mode === 'builder';
+
+				// A setting the widget does not have has to be reported, not
+				// swallowed - that report is the only thing standing between a
+				// typo and an element that renders blank.
+				const typo = json(await cli(['run', 'niranzwp/elementor-write', '--input', JSON.stringify({
+					id: +id, mode: 'append',
+					elements: [{ elType: 'widget', widgetType: 'heading', settings: { titel: 'x' } }],
+				}), '--yes']));
+				const caught = (typo?.unknown_settings ?? []).some((k) => k.endsWith('.titel'));
+
+				const undone = await restore(wrote?.checkpoint_id);
+				const back = json(await cli(['run', 'niranzwp/elementor-read', '--input', JSON.stringify({ id: +id, depth: 3 })]));
+				const restored = !back?.elements?.length || titles(back) !== 'one|two|three';
+
+				results.push({
+					name: 'niranzwp/elementor-write',
+					status: built && adopted && caught && undone && restored ? 'ok' : 'FAIL',
+					detail: built && adopted && caught && undone && restored
+						? 'built a page, made it an Elementor page, caught a bad setting, restored'
+						: `built=${built} adopted=${adopted} caught_typo=${caught} undone=${undone} restored=${restored}`,
+				});
+
+				// move needs the layout back
+				await cli(['run', 'niranzwp/elementor-write', '--input', JSON.stringify({
+					id: +id, mode: 'replace-page', dry_run: false,
+					elements: [{ elType: 'container', settings: {}, elements: [heading('one'), heading('two'), heading('three')] }],
+				}), '--yes']);
+
+				const before = json(await cli(['run', 'niranzwp/elementor-read', '--input', JSON.stringify({ id: +id, depth: 3 })]));
+				const kids = before?.elements?.[0]?.elements ?? [];
+				const last = kids[kids.length - 1]?.id;
+				const first = kids[0]?.id;
+
+				const mv = json(await cli(['run', 'niranzwp/elementor-move', '--input', JSON.stringify({
+					id: +id, element_id: last, target: first, where: 'before', dry_run: false,
+				}), '--yes']));
+				const moved = json(await cli(['run', 'niranzwp/elementor-read', '--input', JSON.stringify({ id: +id, depth: 3 })]));
+				const reordered = titles(moved) === 'three|one|two';
+
+				// An element moved inside itself would leave the post
+				const selfMove = await cli(['run', 'niranzwp/elementor-move', '--input', JSON.stringify({
+					id: +id, element_id: before?.elements?.[0]?.id, target: first, where: 'first', dry_run: false,
+				}), '--yes']);
+				const refused = !selfMove.ok;
+
+				const mvUndone = await restore(mv?.checkpoint_id);
+				const mvBack = json(await cli(['run', 'niranzwp/elementor-read', '--input', JSON.stringify({ id: +id, depth: 3 })]));
+
+				results.push({
+					name: 'niranzwp/elementor-move',
+					status: reordered && refused && mvUndone && titles(mvBack) === 'one|two|three' ? 'ok' : 'FAIL',
+					detail: reordered && refused && mvUndone && titles(mvBack) === 'one|two|three'
+						? 'reordered, refused a move into itself, restored'
+						: `reordered=${reordered} refused_self=${refused} undone=${mvUndone} order_back=${titles(mvBack)}`,
+				});
+
+				await cli(['post', 'delete', id, '--force', '--yes']);
+			}
 		}
 	}
 

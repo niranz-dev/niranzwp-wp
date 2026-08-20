@@ -4,7 +4,7 @@ Tags: cli, rest-api, abilities, seo, automation
 Requires at least: 6.9
 Tested up to: 7.0.4
 Requires PHP: 8.0
-Stable tag: 5.3.13
+Stable tag: 5.3.14
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -104,6 +104,60 @@ or capturable, and wp-admin and wp-includes cannot be written to.
 3. Check NiranzWP > Troubleshoot if anything looks wrong.
 
 == Changelog ==
+
+= 5.3.14 =
+* Elementor: build a whole page, not one setting at a time. Write, move and edit
+  layouts; read the widget catalogue this site actually has, so a layout is
+  composed from real widgets and real setting names; page settings and the site
+  kit, which is where global colours and fonts live; and headers, footers and
+  popups with the conditions that place them.
+* Elementor: writing a layout to a page that had never been opened in the editor
+  stored it and rendered nothing, because Elementor only renders for a post its
+  meta says the builder built. Such a page is now made an Elementor page.
+* Elementor: a container's own spacing - margin, padding, width, z-index - was
+  missing from the catalogue, although writing it worked. The shared control set
+  is now read from the shared widget rather than guessed from the editor tab.
+* Gutenberg: address one block instead of rewriting the body. Every block now
+  reports its path; block-find locates blocks by type, attribute or text;
+  block-update changes one block's attributes; block-move takes a block before,
+  after or inside another; and block-write gained after, before, replace-block
+  and delete.
+* OAuth: sign in through the browser. authorization_code with PKCE, the two
+  discovery documents a connector looks for, and a WWW-Authenticate header on
+  the MCP endpoint so a client that only found the endpoint is told where to
+  ask. The existing code-in-wp-admin flow is unchanged.
+* MCP: the server offered ten tools from a list written by hand. Every ability
+  added since was invisible to any MCP client. It now offers what is registered.
+* Connections: one row per connection rather than one per token, and revoking a
+  row ends that approval alone.
+* Updates: "Check Again" reached the plugin's own update check, which had been
+  serving a cached answer for up to twelve hours.
+* Documentation under docs/: connecting a client, designing pages, the full
+  ability reference, and what happens when a write goes wrong.
+
+= 5.3.13 =
+* Checkpoints are called snapshots everywhere they are read.
+
+= 5.3.12 =
+* The edition chip in the admin menu is as bright as the name beside it.
+* "Check Again" on the Plugins screen now reaches this plugin's update check.
+
+= 5.3.11 =
+* The animated ring is on the masthead only. On the admin menu, which is on
+  screen on every page, it was motion nobody asked for.
+
+= 5.3.10 =
+* The edition sits beside the plugin name, and appears in the admin menu too.
+
+= 5.3.9 =
+* Redirects can be asked about: what is being served, what redirects to a page,
+  and what a page redirects to.
+* Bulk SEO writes leave a snapshot, and a snapshot can be verified without
+  restoring it.
+
+= 5.3.8 =
+* The protocol mark is on the plugin, and the figures carry the brand colour.
+* The running edition is shown.
 
 = 5.3.7 =
 * The Plugins screen showed a changelog that ended at 1.0.0, because it was a
