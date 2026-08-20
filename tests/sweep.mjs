@@ -34,7 +34,9 @@ const INPUTS = {
 	'niranzwp/site-info': {},
 	'niranzwp/list-plugins': { active_only: true },
 	'niranzwp/autoload-report': { limit: 5 },
-	'niranzwp/purge-cache': {},
+	// Never scope "all" here: a full purge makes the origin rebuild every page,
+	// which is a real cost on a large site. One post proves the same thing.
+	'niranzwp/purge-cache': { post_ids: [1] },
 
 	'niranzwp/seo-audit': {},
 	'niranzwp/geo-check': {},
@@ -44,7 +46,7 @@ const INPUTS = {
 	'niranzwp/seo-list-missing': { field: 'description', limit: 5 },
 	'niranzwp/seo-set-meta': { items: [{ id: 1, field: 'description', value: 'sweep test' }], dry_run: true },
 	'niranzwp/media-set-alt': { items: [{ id: 1, alt: 'sweep test' }], dry_run: true },
-	'niranzwp/geo-llms-txt': { dry_run: true },
+	'niranzwp/geo-llms-txt': { write: false },
 
 	'niranzwp/content-audit': {},
 	'niranzwp/content-list': { problem: 'thin', limit: 5 },
@@ -68,10 +70,16 @@ const INPUTS = {
 	// nothing is not worth the risk of a typo in this file.
 	'niranzwp/elementor-settings-read': { scope: 'site' },
 	'niranzwp/elementor-settings-write': null,
+	'niranzwp/elementor-templates': {},
+	// Creating a template is cheap to undo, but placing one changes what every
+	// page on the site renders, so the sweep only ever dry-runs this.
+	'niranzwp/elementor-template-write': { type: 'header', title: 'NiranzWP sweep', dry_run: true },
 
 	'niranzwp/read-file': { path: 'wp-config-sample.php' },
 	'niranzwp/list-directory': { path: 'wp-content/themes' },
-	'niranzwp/write-file': { path: 'niranzwp-sweep.txt', content: 'sweep', dry_run: true },
+	// The WordPress root itself is refused on purpose - it is where a dropped
+	// file does the most harm - so the sweep writes inside uploads.
+	'niranzwp/write-file': { path: 'wp-content/uploads/niranzwp-sweep.txt', content: 'sweep', dry_run: true },
 	'niranzwp/delete-file': '@roundtrip',
 
 	'niranzwp/seo-priorities': {},
@@ -256,7 +264,7 @@ for (const name of discovered) {
 
 	/* ---------------------------------------------------------- delete-file */
 	{
-		const path = 'niranzwp-sweep-delete-me.txt';
+		const path = 'wp-content/uploads/niranzwp-sweep-delete-me.txt';
 		const body = 'the sweep put this here';
 
 		await cli(['run', 'niranzwp/write-file', '--input', JSON.stringify({ path, content: body, dry_run: false }), '--yes']);

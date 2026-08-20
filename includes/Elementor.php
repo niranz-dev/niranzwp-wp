@@ -236,6 +236,48 @@ final class Elementor {
 			'execute_callback'    => [ self::class, 'settings_write' ],
 			'meta'                => [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => false, 'destructive' => true ] ],
 		] );
+
+		register_ability( 'niranzwp/elementor-templates', [
+			'label'               => __( 'List Elementor templates', 'niranzwp' ),
+			'description'         => __( 'Lists the site\'s Elementor library templates - headers, footers, single and archive layouts, popups, saved sections - with the display conditions that decide where each one appears. Also reports which template types this site can create and which condition names it accepts, so a template can be made and placed without guessing.', 'niranzwp' ),
+			'category'            => 'niranzwp-elementor',
+			'input_schema'        => [
+				'type'       => 'object',
+				'properties' => [
+					'type' => [ 'type' => 'string', 'description' => 'Only templates of this type: header, footer, single-post, archive, popup and so on.' ],
+					'id'   => [ 'type' => 'integer', 'description' => 'One template, in full.' ],
+				],
+			],
+			'output_schema'       => [ 'type' => 'object' ],
+			'permission_callback' => $gate,
+			'execute_callback'    => [ self::class, 'templates' ],
+			'meta'                => $ro,
+		] );
+
+		register_ability( 'niranzwp/elementor-template-write', [
+			'label'               => __( 'Create or place an Elementor template', 'niranzwp' ),
+			'description'         => __( 'Creates a template of a given type, or changes an existing one\'s title, status or display conditions. Creating one leaves it empty: write its layout with elementor-write, using the id reported here. Conditions decide where the template takes effect and are what makes a header the site\'s header rather than a page in the library. Reports what would change unless dry_run is false.', 'niranzwp' ),
+			'category'            => 'niranzwp-elementor',
+			'input_schema'        => [
+				'type'       => 'object',
+				'properties' => [
+					'id'         => [ 'type' => 'integer', 'description' => 'An existing template to change. Leave out to create one.' ],
+					'type'       => [ 'type' => 'string', 'description' => 'Template type, when creating. Call elementor-templates for the list.' ],
+					'title'      => [ 'type' => 'string' ],
+					'status'     => [ 'type' => 'string', 'enum' => [ 'publish', 'draft' ] ],
+					'conditions' => [
+						'type'        => 'array',
+						'items'       => [ 'type' => 'string' ],
+						'description' => 'Where this template applies, as include/... or exclude/... - for example include/general, include/singular/post, exclude/singular/page/12. An empty array removes every condition.',
+					],
+					'dry_run'    => [ 'type' => 'boolean', 'default' => true ],
+				],
+			],
+			'output_schema'       => [ 'type' => 'object' ],
+			'permission_callback' => $gate,
+			'execute_callback'    => [ self::class, 'template_write' ],
+			'meta'                => [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => false, 'destructive' => true ] ],
+		] );
 	}
 
 	/** @return array<string,mixed>|\WP_Error */
@@ -1634,6 +1676,348 @@ final class Elementor {
 
 		$result['status'] = 'written';
 		return $result;
+	}
+
+	/* ------------------------------------------------- library templates */
+
+	/** The library post type Elementor keeps templates in. */
+	private const LIBRARY = 'elementor_library';
+
+	/**
+	 * Elementor Pro's theme builder, or null where it is not installed.
+	 *
+	 * Everything about display conditions lives in Pro. The library post type
+	 * itself is free, so a template can be listed and created without Pro; it
+	 * just cannot be placed.
+	 */
+	private static function theme_builder(): ?object {
+		if ( ! class_exists( '\ElementorPro\Modules\ThemeBuilder\Module' ) ) {
+			return null;
+		}
+		$module = \ElementorPro\Modules\ThemeBuilder\Module::instance();
+		return method_exists( $module, 'get_conditions_manager' ) ? $module : null;
+	}
+
+	/**
+	 * The document types that describe where a template goes.
+	 *
+	 * @return string[]
+	 */
+	private static function template_types(): array {
+		if ( ! self::available() ) {
+			return [];
+		}
+		$types = [];
+		foreach ( \Elementor\Plugin::$instance->documents->get_document_types() as $name => $class ) {
+			$cpt = is_callable( [ $class, 'get_property' ] ) ? (array) $class::get_property( 'cpt' ) : [];
+			if ( in_array( self::LIBRARY, $cpt, true ) ) {
+				$types[] = (string) $name;
+			}
+		}
+		sort( $types );
+		return $types;
+	}
+
+	/**
+	 * One template, as reported.
+	 *
+	 * @param \WP_Post $post Library post.
+	 * @return array<string,mixed>
+	 */
+	private static function template_row( \WP_Post $post ): array {
+		$conditions = get_post_meta( $post->ID, '_elementor_conditions', true );
+
+		return [
+			'id'         => $post->ID,
+			'title'      => $post->post_title,
+			'type'       => (string) get_post_meta( $post->ID, '_elementor_template_type', true ),
+			'status'     => $post->post_status,
+			'conditions' => is_array( $conditions ) ? array_values( array_map( 'strval', $conditions ) ) : [],
+			'modified'   => $post->post_modified_gmt,
+		];
+	}
+
+	/** @return array<string,mixed>|\WP_Error */
+	public static function templates( mixed $input = [] ) {
+		$input = is_array( $input ) ? $input : [];
+
+		if ( ! self::available() ) {
+			return new \WP_Error( 'niranzwp_no_elementor', 'Elementor is not active on this site.' );
+		}
+
+		$one = (int) ( $input['id'] ?? 0 );
+		if ( $one > 0 ) {
+			$post = get_post( $one );
+			if ( ! $post || self::LIBRARY !== $post->post_type ) {
+				return new \WP_Error( 'niranzwp_not_found', sprintf( 'Post %d is not an Elementor library template.', $one ) );
+			}
+			$row              = self::template_row( $post );
+			$row['elements']  = self::count_elements( $one );
+			return $row;
+		}
+
+		$args = [
+			'post_type'      => self::LIBRARY,
+			'post_status'    => 'any',
+			'posts_per_page' => 200,
+			'orderby'        => 'modified',
+			'order'          => 'DESC',
+		];
+		$type = (string) ( $input['type'] ?? '' );
+		if ( '' !== $type ) {
+			$args['meta_query'] = [ [ 'key' => '_elementor_template_type', 'value' => $type ] ]; // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+		}
+
+		$templates = array_map( [ self::class, 'template_row' ], get_posts( $args ) );
+
+		$result = [
+			'count'      => count( $templates ),
+			'templates'  => $templates,
+			'types'      => self::template_types(),
+		];
+
+		$module = self::theme_builder();
+		if ( ! $module ) {
+			$result['conditions'] = [
+				'available' => false,
+				'note'      => __( 'Display conditions come from Elementor Pro\'s theme builder, which is not installed. Templates can be created and written here, but nothing will place them.', 'niranzwp' ),
+			];
+			return $result;
+		}
+
+		$names = array_keys( (array) $module->get_conditions_manager()->get_conditions_config() );
+		sort( $names );
+		$result['conditions'] = [
+			'available' => true,
+			'names'     => $names,
+			'note'      => __( 'A condition is include or exclude, then a name, then anything that name narrows: include/general, include/singular/post, exclude/singular/page/12.', 'niranzwp' ),
+		];
+
+		return $result;
+	}
+
+	/**
+	 * How many elements a template's layout holds, for the listing.
+	 *
+	 * @param int $id Template post id.
+	 */
+	private static function count_elements( int $id ): int {
+		$data = json_decode( (string) get_post_meta( $id, '_elementor_data', true ), true );
+		if ( ! is_array( $data ) ) {
+			return 0;
+		}
+		$count = 0;
+		$walk  = static function ( array $nodes ) use ( &$walk, &$count ): void {
+			foreach ( $nodes as $node ) {
+				++$count;
+				if ( ! empty( $node['elements'] ) && is_array( $node['elements'] ) ) {
+					$walk( $node['elements'] );
+				}
+			}
+		};
+		$walk( $data );
+		return $count;
+	}
+
+	/** @return array<string,mixed>|\WP_Error */
+	public static function template_write( mixed $input = [] ) {
+		$input = is_array( $input ) ? $input : [];
+		$dry   = ! isset( $input['dry_run'] ) || (bool) $input['dry_run'];
+		$id    = (int) ( $input['id'] ?? 0 );
+
+		if ( ! self::available() ) {
+			return new \WP_Error( 'niranzwp_no_elementor', 'Elementor is not active on this site.' );
+		}
+
+		$conditions = null;
+		if ( array_key_exists( 'conditions', $input ) ) {
+			if ( ! is_array( $input['conditions'] ) ) {
+				return new \WP_Error( 'niranzwp_bad_conditions', 'conditions must be an array of strings.' );
+			}
+			$conditions = array_values( array_map( 'strval', $input['conditions'] ) );
+
+			$module = self::theme_builder();
+			if ( ! $module ) {
+				return new \WP_Error(
+					'niranzwp_no_theme_builder',
+					'Display conditions need Elementor Pro\'s theme builder, which is not installed on this site.'
+				);
+			}
+
+			$known = (array) $module->get_conditions_manager()->get_conditions_config();
+			foreach ( $conditions as $condition ) {
+				$parts = explode( '/', trim( $condition, '/' ) );
+				if ( count( $parts ) < 2 || ! in_array( $parts[0], [ 'include', 'exclude' ], true ) ) {
+					return new \WP_Error(
+						'niranzwp_bad_condition',
+						sprintf( '"%s" is not a condition. It has to start with include/ or exclude/ and then name one: include/general.', $condition )
+					);
+				}
+				if ( ! isset( $known[ $parts[1] ] ) ) {
+					return new \WP_Error(
+						'niranzwp_bad_condition',
+						sprintf( 'There is no condition called "%s". Call elementor-templates for the names this site accepts.', $parts[1] )
+					);
+				}
+			}
+		}
+
+		/* ----------------------------------------------------- an existing */
+		if ( $id > 0 ) {
+			$post = get_post( $id );
+			if ( ! $post || self::LIBRARY !== $post->post_type ) {
+				return new \WP_Error( 'niranzwp_not_found', sprintf( 'Post %d is not an Elementor library template.', $id ) );
+			}
+
+			$before = self::template_row( $post );
+			$after  = $before;
+			if ( isset( $input['title'] ) ) {
+				$after['title'] = (string) $input['title'];
+			}
+			if ( isset( $input['status'] ) ) {
+				$after['status'] = (string) $input['status'];
+			}
+			if ( null !== $conditions ) {
+				$after['conditions'] = $conditions;
+			}
+
+			$result = [
+				'id'      => $id,
+				'action'  => 'update',
+				'before'  => $before,
+				'after'   => $after,
+				'dry_run' => $dry,
+			];
+
+			if ( $before === $after ) {
+				$result['status'] = 'no_change';
+				return $result;
+			}
+			if ( $dry ) {
+				$result['status'] = 'would_update';
+				$result['note']   = 'Nothing was written. Pass dry_run false to apply.';
+				return $result;
+			}
+
+			$result['checkpoint_id'] = Checkpoint::before_post( $id, 'elementor-template-write' );
+
+			if ( $after['title'] !== $before['title'] || $after['status'] !== $before['status'] ) {
+				$updated = wp_update_post(
+					[
+						'ID'          => $id,
+						'post_title'  => $after['title'],
+						'post_status' => $after['status'],
+					],
+					true
+				);
+				if ( is_wp_error( $updated ) ) {
+					return $updated;
+				}
+			}
+
+			if ( null !== $conditions ) {
+				$saved = self::save_conditions( $id, $conditions );
+				if ( is_wp_error( $saved ) ) {
+					return $saved;
+				}
+			}
+
+			clean_post_cache( $id );
+			$result['status'] = 'updated';
+			return $result;
+		}
+
+		/* --------------------------------------------------------- a new one */
+		$type = (string) ( $input['type'] ?? '' );
+		if ( '' === $type ) {
+			return new \WP_Error( 'niranzwp_missing', 'Creating a template needs its type. Call elementor-templates for the list.' );
+		}
+
+		$types = self::template_types();
+		if ( ! in_array( $type, $types, true ) ) {
+			return new \WP_Error(
+				'niranzwp_unknown_type',
+				sprintf( 'This site has no template type "%s". It has: %s.', $type, implode( ', ', $types ) )
+			);
+		}
+
+		$title  = (string) ( $input['title'] ?? '' );
+		$status = (string) ( $input['status'] ?? 'publish' );
+
+		$result = [
+			'action'      => 'create',
+			'type'        => $type,
+			'title'       => $title,
+			// The post's own status, kept apart from this reply's status,
+			// which says what happened rather than what the template is.
+			'post_status' => $status,
+			'conditions'  => $conditions ?? [],
+			'dry_run'     => $dry,
+		];
+
+		if ( $dry ) {
+			$result['status'] = 'would_create';
+			$result['note']   = 'Nothing was written. Pass dry_run false to apply.';
+			return $result;
+		}
+
+		$document = \Elementor\Plugin::$instance->documents->create(
+			$type,
+			[
+				'post_title'  => '' !== $title ? $title : null,
+				'post_status' => $status,
+			]
+		);
+		if ( is_wp_error( $document ) ) {
+			return $document;
+		}
+
+		$new_id           = (int) $document->get_main_id();
+		$result['id']     = $new_id;
+		$result['edit']   = (string) $document->get_edit_url();
+
+		if ( $conditions ) {
+			$saved = self::save_conditions( $new_id, $conditions );
+			if ( is_wp_error( $saved ) ) {
+				return $saved;
+			}
+		}
+
+		$result['status'] = 'created';
+		$result['note']   = sprintf(
+			'The template is empty. Write its layout with elementor-write on id %d.',
+			$new_id
+		);
+		return $result;
+	}
+
+	/**
+	 * Store display conditions through Pro, not through the meta.
+	 *
+	 * The conditions are cached in an option that decides which template wins
+	 * for a given request, and a template whose conditions are written straight
+	 * to its meta is absent from that cache: saved, and never shown. Pro's own
+	 * manager regenerates the cache, so it does the writing.
+	 *
+	 * @param int      $id         Template post id.
+	 * @param string[] $conditions Conditions as include/... strings.
+	 * @return true|\WP_Error
+	 */
+	private static function save_conditions( int $id, array $conditions ) {
+		$module = self::theme_builder();
+		if ( ! $module ) {
+			return new \WP_Error( 'niranzwp_no_theme_builder', 'Elementor Pro\'s theme builder is not installed.' );
+		}
+
+		// The manager joins each condition's parts with a slash, so it wants
+		// them apart rather than as the string they will be stored as.
+		$split = array_map(
+			static fn( string $c ): array => explode( '/', trim( $c, '/' ) ),
+			$conditions
+		);
+
+		$module->get_conditions_manager()->save_conditions( $id, $split );
+		return true;
 	}
 
 }
