@@ -163,21 +163,21 @@ final class OAuth {
 	 * has any credential at all.
 	 */
 	public static function metadata_document(): void {
-		$suffix = self::asked_for( 'oauth-authorization-server' );
-		if ( null === $suffix ) {
+		if ( null === self::asked_for( 'oauth-authorization-server' ) ) {
 			return;
 		}
 
 		/*
-		 * The issuer has to be the identifier this document was asked for, and
-		 * with path insertion that is the origin plus the resource's own path.
-		 * Returning the bare origin at the suffixed URL is a mismatch, and a
-		 * client that checks - which is every current connector - throws the
-		 * whole document away and stops before it ever reaches authorize.
+		 * One issuer, whichever URL the document was asked for. The RFC reads
+		 * as though the identifier should follow the path it was found under,
+		 * and making it do that broke connecting: the endpoints below do not
+		 * move, so a second identifier for the same server is a second name
+		 * for one thing, and a client that binds a token to it has bound it to
+		 * something the next request does not present.
 		 */
 		wp_send_json(
 			[
-				'issuer'                                => untrailingslashit( home_url() ) . $suffix,
+				'issuer'                                => untrailingslashit( home_url() ),
 				'registration_endpoint'                 => rest_url( self::NS . '/oauth/register' ),
 				'authorization_endpoint'                => rest_url( self::NS . '/oauth/authorize' ),
 				'device_authorization_endpoint'         => rest_url( self::NS . '/oauth/device' ),
@@ -215,20 +215,14 @@ final class OAuth {
 			return $response;
 		}
 
-		/*
-		 * Points at the path-inserted form, which is the canonical URL for
-		 * this resource's metadata under RFC 9728 - the bare one is answered
-		 * too, but a client should be sent to the document that names the
-		 * resource it just asked about.
-		 */
-		$resource = (string) wp_parse_url( Mcp::endpoint(), PHP_URL_PATH );
-
+		// The bare form, which is the one clients are known to accept. Every
+		// other shape is answered as well, but this is what is advertised.
 		$response->header(
 			'WWW-Authenticate',
 			sprintf(
 				'Bearer realm="%s", resource_metadata="%s"',
 				esc_url_raw( home_url() ),
-				esc_url_raw( home_url( '/.well-known/oauth-protected-resource' . $resource ) )
+				esc_url_raw( home_url( '/.well-known/oauth-protected-resource' ) )
 			)
 		);
 
@@ -243,17 +237,14 @@ final class OAuth {
 	 * looks for after a 401 from the MCP endpoint.
 	 */
 	public static function protected_resource_document(): void {
-		$suffix = self::asked_for( 'oauth-protected-resource' );
-		if ( null === $suffix ) {
+		if ( null === self::asked_for( 'oauth-protected-resource' ) ) {
 			return;
 		}
 
 		wp_send_json(
 			[
 				'resource'                 => Mcp::endpoint(),
-				// Named the same way this document was reached, so the client
-				// looks the authorization server up where the issuer matches.
-				'authorization_servers'    => [ untrailingslashit( home_url() ) . $suffix ],
+				'authorization_servers'    => [ untrailingslashit( home_url() ) ],
 				'scopes_supported'         => [ 'abilities' ],
 				'bearer_methods_supported' => [ 'header' ],
 				'resource_documentation'   => 'https://niranz.dev',

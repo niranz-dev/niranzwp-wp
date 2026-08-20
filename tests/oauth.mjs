@@ -72,14 +72,13 @@ for (const [path, wants] of [
 	 * over - quietly, before it ever reaches the authorize endpoint.
 	 */
 	const suffixed = await (await fetch(`${SITE}/.well-known/oauth-authorization-server${resource}`)).json();
-	check('issuer matches the suffixed URL', suffixed.issuer === `${SITE}${resource}`, suffixed.issuer);
-
 	const bare = await (await fetch(`${SITE}/.well-known/oauth-authorization-server`)).json();
-	check('issuer matches the bare URL', bare.issuer === SITE, bare.issuer);
+	check('one issuer, whichever URL was used', suffixed.issuer === SITE && bare.issuer === SITE,
+		`${suffixed.issuer} / ${bare.issuer}`);
 
 	const pr = await (await fetch(`${SITE}/.well-known/oauth-protected-resource${resource}`)).json();
-	check('the resource names an authorization server whose issuer will match',
-		(pr.authorization_servers || [])[0] === `${SITE}${resource}`, (pr.authorization_servers || []).join(', '));
+	check('the resource names that same issuer', (pr.authorization_servers || [])[0] === SITE,
+		(pr.authorization_servers || []).join(', '));
 }
 
 {

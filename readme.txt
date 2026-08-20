@@ -4,7 +4,7 @@ Tags: cli, rest-api, abilities, seo, automation
 Requires at least: 6.9
 Tested up to: 7.0.4
 Requires PHP: 8.0
-Stable tag: 5.3.19
+Stable tag: 5.3.20
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -104,6 +104,13 @@ or capturable, and wp-admin and wp-includes cannot be written to.
 3. Check NiranzWP > Troubleshoot if anything looks wrong.
 
 == Changelog ==
+
+= 5.3.20 =
+* Reverted 5.3.16. Making the issuer follow the path the document was found
+  under reads correct and is not what works: the endpoints do not move, so a
+  second identifier for the same server is a second name for one thing. There
+  is one issuer again, whichever URL a client asks at, and the protected
+  resource and the challenge header both name it.
 
 = 5.3.19 =
 * Fixed: approving a connection asked you to log in when you were already
