@@ -1606,13 +1606,43 @@ final class Admin {
 					});
 				});
 			});
+			/*
+			 * navigator.clipboard exists only in a secure context - https, or
+			 * localhost by name. A site reached over plain http, which is most
+			 * sites in development, does not have it at all, and the button
+			 * did nothing and said nothing. The old selection-based copy still
+			 * works there, so it is what happens when the modern one is absent
+			 * or refuses.
+			 */
+			function nzwpCopy(text) {
+				if (navigator.clipboard && window.isSecureContext) {
+					return navigator.clipboard.writeText(text);
+				}
+				return new Promise(function (resolve, reject) {
+					var box = document.createElement('textarea');
+					box.value = text;
+					box.setAttribute('readonly', '');
+					box.style.position = 'fixed';
+					box.style.top = '-1000px';
+					document.body.appendChild(box);
+					box.select();
+					var ok = false;
+					try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+					document.body.removeChild(box);
+					ok ? resolve() : reject();
+				});
+			}
 			document.querySelectorAll('.nzwp-copy').forEach(function (btn) {
 				btn.addEventListener('click', function () {
+					var was = btn.textContent;
 					var text = btn.parentNode.querySelector('.nzwp-code').innerText;
-					navigator.clipboard.writeText(text).then(function () {
-						var was = btn.textContent;
+					nzwpCopy(text).then(function () {
 						btn.textContent = 'Copied';
 						btn.classList.add('done');
+					}).catch(function () {
+						// Say so rather than look as though nothing happened.
+						btn.textContent = 'Press ctrl-C';
+					}).then(function () {
 						setTimeout(function () { btn.textContent = was; btn.classList.remove('done'); }, 1600);
 					});
 				});
@@ -1913,12 +1943,36 @@ final class Admin {
 		</div>
 
 		<script>
+		// Same reason as the Configuration screen: navigator.clipboard is not
+		// there over plain http, and this screen is the one place a site being
+		// set up is most likely to be on plain http.
+		function nzwpSetupCopy(text) {
+			if (navigator.clipboard && window.isSecureContext) {
+				return navigator.clipboard.writeText(text);
+			}
+			return new Promise(function (resolve, reject) {
+				var box = document.createElement('textarea');
+				box.value = text;
+				box.setAttribute('readonly', '');
+				box.style.position = 'fixed';
+				box.style.top = '-1000px';
+				document.body.appendChild(box);
+				box.select();
+				var ok = false;
+				try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+				document.body.removeChild(box);
+				ok ? resolve() : reject();
+			});
+		}
 		document.querySelectorAll('.nzwp-setup .nzwp-copy').forEach(function (btn) {
 			btn.addEventListener('click', function () {
-				navigator.clipboard.writeText(btn.parentNode.querySelector('.nzwp-code').innerText).then(function () {
-					var was = btn.textContent;
+				var was = btn.textContent;
+				nzwpSetupCopy(btn.parentNode.querySelector('.nzwp-code').innerText).then(function () {
 					btn.textContent = <?php echo wp_json_encode( __( 'Copied', 'niranzwp' ) ); ?>;
 					btn.classList.add('done');
+				}).catch(function () {
+					btn.textContent = <?php echo wp_json_encode( __( 'Press ctrl-C', 'niranzwp' ) ); ?>;
+				}).then(function () {
 					setTimeout(function () { btn.textContent = was; btn.classList.remove('done'); }, 1600);
 				});
 			});
