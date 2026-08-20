@@ -60,6 +60,14 @@ final class Mcp {
 
 		add_action( 'mcp_adapter_init', [ self::class, 'register_server' ] );
 
+		/*
+		 * A record of what actually arrives at this endpoint. When a client
+		 * says it cannot reach the server there are two very different causes
+		 * - the request never got here, or it got here and was refused - and
+		 * from outside they look identical. This is how to tell them apart.
+		 */
+		add_filter( 'rest_post_dispatch', [ self::class, 'record' ], 20, 3 );
+
 		// Loading the autoloader is not enough: the adapter only fires
 		// mcp_adapter_init once its singleton is constructed, so it has to be
 		// booted explicitly or no MCP endpoint is ever registered.
@@ -159,6 +167,60 @@ final class Mcp {
 
 		sort( $names );
 		return array_values( $names );
+	}
+
+	/** How many recent requests to keep. */
+	private const LOG      = 'niranzwp_mcp_log';
+	private const LOG_KEEP = 25;
+
+	/**
+	 * Note one request to this endpoint, and what it was answered with.
+	 *
+	 * @param \WP_HTTP_Response $response Response about to be sent.
+	 * @param \WP_REST_Server   $server   Unused.
+	 * @param \WP_REST_Request  $request  The request being answered.
+	 * @return \WP_HTTP_Response
+	 */
+	public static function record( $response, $server, $request ) {
+		if ( ! $response instanceof \WP_HTTP_Response ) {
+			return $response;
+		}
+		if ( ! str_starts_with( (string) $request->get_route(), '/' . self::NAMESPACE . '/' . self::ROUTE ) ) {
+			return $response;
+		}
+
+		$auth = (string) $request->get_header( 'authorization' );
+		$body = $request->get_json_params();
+
+		$log   = get_option( self::LOG, [] );
+		$log   = is_array( $log ) ? $log : [];
+		$log[] = [
+			'at'     => time(),
+			// The forwarded address first: behind a CDN the connecting address
+			// is the CDN, and the caller is the thing worth knowing.
+			'ip'     => sanitize_text_field( (string) ( $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '' ) ),
+			'method' => (string) $request->get_method(),
+			// Never the credential itself - only whether one was sent, and of
+			// what kind, which is all that is ever in question here.
+			'auth'   => '' === $auth ? 'none' : strtok( $auth, ' ' ),
+			'call'   => is_array( $body ) ? sanitize_text_field( (string) ( $body['method'] ?? '' ) ) : '',
+			'status' => (int) $response->get_status(),
+			'agent'  => mb_substr( sanitize_text_field( (string) ( $_SERVER['HTTP_USER_AGENT'] ?? '' ) ), 0, 60 ),
+		];
+
+		update_option( self::LOG, array_slice( $log, -self::LOG_KEEP ), false );
+
+		return $response;
+	}
+
+	/**
+	 * The recent requests, newest first, for the Troubleshoot screen.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	public static function recent(): array {
+		$log = get_option( self::LOG, [] );
+		return is_array( $log ) ? array_reverse( $log ) : [];
 	}
 
 	/** Where an MCP client should point, once abilities are enabled. */

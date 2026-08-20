@@ -1803,7 +1803,57 @@ final class Admin {
 			);
 		}
 
-		echo '</tbody></table></div></div>';
+		echo '</tbody></table></div>';
+
+		self::render_mcp_log();
+
+		echo '</div>';
+	}
+
+	/**
+	 * What has actually reached the MCP endpoint.
+	 *
+	 * When a client says it cannot reach the server there are two very
+	 * different causes - the request never arrived, or it arrived and was
+	 * refused - and from the client's side they look the same. An empty table
+	 * while a client is failing means something in front of this site is
+	 * answering for it: a CDN, a firewall, a security plugin.
+	 */
+	private static function render_mcp_log(): void {
+		$rows = Mcp::recent();
+		?>
+		<div class="nzwp-card">
+			<h2><?php esc_html_e( 'Recent requests to the MCP endpoint', 'niranzwp' ); ?></h2>
+			<p class="nzwp-desc" style="margin-top:0">
+				<?php esc_html_e( 'The last twenty-five, newest first. Nothing here while a client reports a failure means the request is being stopped before it reaches WordPress.', 'niranzwp' ); ?>
+			</p>
+
+			<?php if ( ! $rows ) : ?>
+				<p><?php esc_html_e( 'Nothing yet.', 'niranzwp' ); ?></p>
+			<?php else : ?>
+				<table class="widefat striped">
+					<thead><tr>
+						<th><?php esc_html_e( 'When', 'niranzwp' ); ?></th>
+						<th><?php esc_html_e( 'From', 'niranzwp' ); ?></th>
+						<th><?php esc_html_e( 'Call', 'niranzwp' ); ?></th>
+						<th><?php esc_html_e( 'Credential', 'niranzwp' ); ?></th>
+						<th><?php esc_html_e( 'Answered', 'niranzwp' ); ?></th>
+					</tr></thead>
+					<tbody>
+					<?php foreach ( $rows as $r ) : ?>
+						<tr>
+							<td><?php echo esc_html( wp_date( 'H:i:s', (int) $r['at'] ) ); ?></td>
+							<td><code><?php echo esc_html( (string) $r['ip'] ); ?></code></td>
+							<td><?php echo esc_html( '' !== $r['call'] ? (string) $r['call'] : (string) $r['method'] ); ?></td>
+							<td><?php echo esc_html( (string) $r['auth'] ); ?></td>
+							<td><?php echo esc_html( (string) $r['status'] ); ?></td>
+						</tr>
+					<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
+		</div>
+		<?php
 	}
 
 	/** @return array<int,array{status:string,label:string,detail:string}> */

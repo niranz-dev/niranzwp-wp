@@ -4,7 +4,7 @@ Tags: cli, rest-api, abilities, seo, automation
 Requires at least: 6.9
 Tested up to: 7.0.4
 Requires PHP: 8.0
-Stable tag: 5.3.16
+Stable tag: 5.3.17
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -104,6 +104,13 @@ or capturable, and wp-admin and wp-includes cannot be written to.
 3. Check NiranzWP > Troubleshoot if anything looks wrong.
 
 == Changelog ==
+
+= 5.3.17 =
+* Troubleshoot now lists the last twenty-five requests that reached the MCP
+  endpoint - when, from which address, what was called, whether a credential
+  came with it, and what it was answered with. When a client reports that it
+  cannot reach the server, this is what says whether the request arrived at all
+  or was stopped by something in front of the site.
 
 = 5.3.16 =
 * Fixed: a connector registered itself and then stopped, without ever opening
