@@ -3,7 +3,7 @@
  * Plugin Name:       NiranzWP
  * Plugin URI:        https://niranz.dev
  * Description:       MCP server that gives AI agents control of WordPress through purpose-built abilities - SEO, content, blocks, the database and files. Every write is previewed, snapshotted, and reverted automatically if the site breaks.
- * Version:           5.3.10
+ * Version:           5.3.11
  * Requires at least: 6.9
  * Requires PHP:      8.0
  * Author:            Niranjan
@@ -21,7 +21,7 @@ namespace NiranzWP;
 
 defined( 'ABSPATH' ) || exit;
 
-const VERSION     = '5.3.10';
+const VERSION     = '5.3.11';
 /* Placeholder until the repository is public. Whatever this points at is what
    the masthead's GitHub mark opens, so it is one line to change and nothing
    else references it. */
