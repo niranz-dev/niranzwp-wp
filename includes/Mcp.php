@@ -68,6 +68,16 @@ final class Mcp {
 		 */
 		add_filter( 'rest_post_dispatch', [ self::class, 'record' ], 20, 3 );
 
+		/*
+		 * A client reads the session id off the initialize response and sends
+		 * it back on every call after that. WordPress exposes three headers to
+		 * a cross-origin caller and this is not one of them, so anything
+		 * running in a browser gets the header sent and is not allowed to read
+		 * it - and fails on its second request, which looks from the outside
+		 * like the server not being an MCP server at all.
+		 */
+		add_filter( 'rest_pre_serve_request', [ self::class, 'expose_headers' ], 10, 4 );
+
 		// Loading the autoloader is not enough: the adapter only fires
 		// mcp_adapter_init once its singleton is constructed, so it has to be
 		// booted explicitly or no MCP endpoint is ever registered.
@@ -167,6 +177,42 @@ final class Mcp {
 
 		sort( $names );
 		return array_values( $names );
+	}
+
+	/**
+	 * Let a cross-origin caller read the headers this protocol needs.
+	 *
+	 * @param bool              $served  Whether the request has been served.
+	 * @param \WP_HTTP_Response $result  Response about to be sent.
+	 * @param \WP_REST_Request  $request The request being answered.
+	 * @param \WP_REST_Server   $server  Unused.
+	 * @return bool
+	 */
+	public static function expose_headers( $served, $result, $request, $server ) {
+		if ( ! $request instanceof \WP_REST_Request ) {
+			return $served;
+		}
+		if ( ! str_starts_with( (string) $request->get_route(), '/' . self::NAMESPACE . '/' . self::ROUTE ) ) {
+			return $served;
+		}
+		if ( headers_sent() ) {
+			return $served;
+		}
+
+		$exposed = [ 'Mcp-Session-Id', 'MCP-Protocol-Version', 'WWW-Authenticate' ];
+
+		// Added to whatever core already exposes rather than replacing it.
+		foreach ( headers_list() as $header ) {
+			if ( 0 === stripos( $header, 'access-control-expose-headers:' ) ) {
+				$existing = array_map( 'trim', explode( ',', substr( $header, strlen( 'access-control-expose-headers:' ) ) ) );
+				$exposed  = array_merge( $existing, $exposed );
+				break;
+			}
+		}
+
+		header( 'Access-Control-Expose-Headers: ' . implode( ', ', array_unique( array_filter( $exposed ) ) ) );
+
+		return $served;
 	}
 
 	/** How many recent requests to keep. */

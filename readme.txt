@@ -4,7 +4,7 @@ Tags: cli, rest-api, abilities, seo, automation
 Requires at least: 6.9
 Tested up to: 7.0.4
 Requires PHP: 8.0
-Stable tag: 5.3.17
+Stable tag: 5.3.18
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -104,6 +104,15 @@ or capturable, and wp-admin and wp-includes cannot be written to.
 3. Check NiranzWP > Troubleshoot if anything looks wrong.
 
 == Changelog ==
+
+= 5.3.18 =
+* Fixed: a cross-origin client could not read the session id. A client takes
+  Mcp-Session-Id off the initialize response and sends it back on every call
+  after that; WordPress exposes three headers to a cross-origin caller and this
+  was not one of them, so the header was sent and could not be read, and the
+  second request failed for want of it. That reads from outside like the server
+  not being an MCP server at all. Mcp-Session-Id, MCP-Protocol-Version and
+  WWW-Authenticate are added to what is already exposed.
 
 = 5.3.17 =
 * Troubleshoot now lists the last twenty-five requests that reached the MCP
