@@ -96,6 +96,32 @@ final class Elementor {
 			'meta'                => [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => false, 'destructive' => true ] ],
 		] );
 
+		register_ability( 'niranzwp/elementor-move', [
+			'label'               => __( 'Move an Elementor element', 'niranzwp' ),
+			'description'         => __( 'Moves one element, with everything inside it, to another place on the same page - before or after another element, or in at the start or end of a container. The element keeps its id, so its styling and any link to it survive the move. Reports what would change unless dry_run is false.', 'niranzwp' ),
+			'category'            => 'niranzwp-elementor',
+			'input_schema'        => [
+				'type'       => 'object',
+				'properties' => [
+					'id'         => [ 'type' => 'integer' ],
+					'element_id' => [ 'type' => 'string', 'description' => 'The element to move.' ],
+					'target'     => [ 'type' => 'string', 'description' => 'The element to move it relative to. Omit with where first or last to use the top level of the page.' ],
+					'where'      => [
+						'type'    => 'string',
+						'enum'    => [ 'before', 'after', 'first', 'last' ],
+						'default' => 'after',
+						'description' => 'before and after sit beside target. first and last go inside it.',
+					],
+					'dry_run'    => [ 'type' => 'boolean', 'default' => true ],
+				],
+				'required'   => [ 'id', 'element_id' ],
+			],
+			'output_schema'       => [ 'type' => 'object' ],
+			'permission_callback' => $gate,
+			'execute_callback'    => [ self::class, 'move' ],
+			'meta'                => [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => false, 'destructive' => true ] ],
+		] );
+
 		register_ability( 'niranzwp/elementor-widgets', [
 			'label'               => __( 'List Elementor widgets', 'niranzwp' ),
 			'description'         => __( 'Lists the Elementor widget types registered on this site, so a layout is built only from widgets that actually exist here. Call this before writing any Elementor content, and elementor-widget for the settings a particular one accepts.', 'niranzwp' ),
@@ -511,6 +537,37 @@ final class Elementor {
 	}
 
 	/**
+	 * A container is not a widget, and Elementor keeps the two in different
+	 * registries: widgets_manager for the 253 things you drop onto a page,
+	 * elements_manager for container, section and column - the things you drop
+	 * them into. Nothing here was checking the second, so a mistyped container
+	 * setting went through silently, which is the failure this whole catalogue
+	 * exists to prevent.
+	 */
+	private static function element_type( string $name ): ?object {
+		if ( ! self::available() ) {
+			return null;
+		}
+
+		$wm = self::widget_manager();
+		if ( $wm ) {
+			$widget = $wm->get_widget_types( $name );
+			if ( $widget ) {
+				return $widget;
+			}
+		}
+
+		if ( isset( \Elementor\Plugin::$instance->elements_manager ) ) {
+			$element = \Elementor\Plugin::$instance->elements_manager->get_element_types( $name );
+			if ( $element ) {
+				return $element;
+			}
+		}
+
+		return null;
+	}
+
+	/**
 	 * @param array<string,mixed> $input
 	 * @return array<string,mixed>|\WP_Error
 	 */
@@ -582,11 +639,11 @@ final class Elementor {
 			return new \WP_Error( 'niranzwp_bad_input', 'Pass the widget name, e.g. heading.' );
 		}
 
-		$widget = $wm->get_widget_types( $name );
+		$widget = self::element_type( $name );
 		if ( ! $widget ) {
 			return new \WP_Error(
 				'niranzwp_not_found',
-				sprintf( 'No widget type "%s" on this site. Call elementor-widgets to see what there is.', $name )
+				sprintf( 'No widget or element type "%s" on this site. Call elementor-widgets to see what there is; container, section and column are valid names here too.', $name )
 			);
 		}
 
@@ -651,13 +708,22 @@ final class Elementor {
 			$settings[ (string) $key ] = $entry;
 		}
 
+		/*
+		 * get_categories() is a widget method. A container has no editor
+		 * category because you do not pick it out of the widget panel, and
+		 * calling it there is a fatal - which is what happened the first time
+		 * this accepted a container name.
+		 */
 		$result = [
-			'name'       => $name,
-			'title'      => (string) $widget->get_title(),
-			'categories' => array_map( 'strval', (array) $widget->get_categories() ),
-			'count'      => count( $settings ),
-			'settings'   => $settings,
+			'name'     => $name,
+			'title'    => method_exists( $widget, 'get_title' ) ? (string) $widget->get_title() : $name,
+			'kind'     => method_exists( $widget, 'get_categories' ) ? 'widget' : 'element',
+			'count'    => count( $settings ),
+			'settings' => $settings,
 		];
+		if ( method_exists( $widget, 'get_categories' ) ) {
+			$result['categories'] = array_map( 'strval', (array) $widget->get_categories() );
+		}
 
 		if ( $skipped['shared'] > 0 ) {
 			$result['shared_settings'] = [
@@ -755,7 +821,18 @@ final class Elementor {
 			}
 			$out['settings'] = (object) $settings;
 		} else {
-			$out['settings'] = (object) ( isset( $node['settings'] ) && is_array( $node['settings'] ) ? $node['settings'] : [] );
+			$settings = isset( $node['settings'] ) && is_array( $node['settings'] ) ? $node['settings'] : [];
+			$element  = self::element_type( $type );
+			if ( $element && $settings ) {
+				$known = array_keys( $element->get_controls() );
+				foreach ( array_keys( $settings ) as $key ) {
+					$base = preg_replace( '/_(tablet|mobile|laptop|widescreen|mobile_extra|tablet_extra)$/', '', (string) $key );
+					if ( ! in_array( (string) $key, $known, true ) && ! in_array( (string) $base, $known, true ) ) {
+						$report['unknown_settings'][] = $type . '.' . $key;
+					}
+				}
+			}
+			$out['settings'] = (object) $settings;
 		}
 
 		// Seven lowercase hex characters, which is the shape Elementor's own
@@ -962,6 +1039,188 @@ final class Elementor {
 		clean_post_cache( $id );
 
 		$result['status'] = 'written';
+		return $result;
+	}
+
+
+	/* ---------------------------------------------------------------- move */
+
+	/**
+	 * Lift one element out of the tree and hand it back with what remains.
+	 *
+	 * @param array<int,array<string,mixed>> $nodes
+	 * @return array{0:array<int,array<string,mixed>>,1:?array<string,mixed>}
+	 */
+	private static function extract( array $nodes, string $element_id ): array {
+		$out  = [];
+		$took = null;
+
+		foreach ( $nodes as $node ) {
+			if ( is_array( $node ) && (string) ( $node['id'] ?? '' ) === $element_id ) {
+				$took = $node;
+				continue;
+			}
+			if ( is_array( $node ) && ! empty( $node['elements'] ) && is_array( $node['elements'] ) ) {
+				[ $kids, $found ] = self::extract( $node['elements'], $element_id );
+				if ( null !== $found ) {
+					$took             = $found;
+					$node['elements'] = $kids;
+				}
+			}
+			$out[] = $node;
+		}
+
+		return [ $out, $took ];
+	}
+
+	/** Is $element_id anywhere inside this subtree, including at its root? */
+	private static function holds( array $node, string $element_id ): bool {
+		if ( (string) ( $node['id'] ?? '' ) === $element_id ) {
+			return true;
+		}
+		foreach ( (array) ( $node['elements'] ?? [] ) as $child ) {
+			if ( is_array( $child ) && self::holds( $child, $element_id ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Put a subtree inside a container, at one end or the other.
+	 *
+	 * @param array<int,array<string,mixed>> $nodes
+	 * @param array<string,mixed>            $moving
+	 * @return array{0:array<int,array<string,mixed>>,1:bool}
+	 */
+	private static function put_inside( array $nodes, string $target, array $moving, string $end ): array {
+		$out   = [];
+		$found = false;
+
+		foreach ( $nodes as $node ) {
+			if ( is_array( $node ) && (string) ( $node['id'] ?? '' ) === $target ) {
+				$children = isset( $node['elements'] ) && is_array( $node['elements'] ) ? $node['elements'] : [];
+				$node['elements'] = 'first' === $end
+					? array_merge( [ $moving ], $children )
+					: array_merge( $children, [ $moving ] );
+				$found = true;
+				$out[] = $node;
+				continue;
+			}
+			if ( is_array( $node ) && ! empty( $node['elements'] ) && is_array( $node['elements'] ) ) {
+				[ $kids, $hit ] = self::put_inside( $node['elements'], $target, $moving, $end );
+				if ( $hit ) {
+					$found            = true;
+					$node['elements'] = $kids;
+				}
+			}
+			$out[] = $node;
+		}
+
+		return [ $out, $found ];
+	}
+
+	/**
+	 * @param mixed $input
+	 * @return array<string,mixed>|\WP_Error
+	 */
+	public static function move( mixed $input = [] ) {
+		$input = is_array( $input ) ? $input : [];
+
+		$id         = (int) ( $input['id'] ?? 0 );
+		$element_id = (string) ( $input['element_id'] ?? '' );
+		$target     = (string) ( $input['target'] ?? '' );
+		$where      = (string) ( $input['where'] ?? 'after' );
+		$dry        = ! isset( $input['dry_run'] ) || (bool) $input['dry_run'];
+
+		if ( ! self::available() ) {
+			return new \WP_Error( 'niranzwp_no_elementor', 'Elementor is not active on this site.' );
+		}
+		if ( '' === $element_id ) {
+			return new \WP_Error( 'niranzwp_missing', 'Pass the element_id to move.' );
+		}
+		if ( '' === $target && ! in_array( $where, [ 'first', 'last' ], true ) ) {
+			return new \WP_Error( 'niranzwp_missing', sprintf( 'Where "%s" needs a target element id.', $where ) );
+		}
+		if ( $target === $element_id ) {
+			return new \WP_Error( 'niranzwp_bad_input', 'An element cannot be moved relative to itself.' );
+		}
+
+		$data = self::data( $id );
+		if ( is_wp_error( $data ) ) {
+			return $data;
+		}
+
+		[ $remaining, $moving ] = self::extract( $data, $element_id );
+		if ( null === $moving ) {
+			return new \WP_Error(
+				'niranzwp_element_not_found',
+				sprintf( 'No element with id "%s" on post %d. Use elementor-find to locate one.', $element_id, $id )
+			);
+		}
+
+		/*
+		 * Moving something into its own subtree detaches that whole branch
+		 * from the page: the element is no longer anywhere the renderer walks,
+		 * and it takes its children with it. The tree that comes back looks
+		 * valid, which is what makes it worth refusing rather than checking
+		 * for afterwards.
+		 */
+		if ( '' !== $target && self::holds( $moving, $target ) ) {
+			return new \WP_Error(
+				'niranzwp_bad_input',
+				sprintf( 'Element "%s" is inside "%s"; moving it there would detach both from the page.', $target, $element_id )
+			);
+		}
+
+		if ( '' === $target ) {
+			$data  = 'first' === $where ? array_merge( [ $moving ], $remaining ) : array_merge( $remaining, [ $moving ] );
+			$found = true;
+		} elseif ( in_array( $where, [ 'first', 'last' ], true ) ) {
+			[ $data, $found ] = self::put_inside( $remaining, $target, $moving, $where );
+		} else {
+			[ $data, $found ] = self::splice( $remaining, $target, [ $moving ], 'before' === $where ? 'before' : 'after' );
+		}
+
+		if ( ! $found ) {
+			return new \WP_Error(
+				'niranzwp_element_not_found',
+				sprintf( 'No element with id "%s" on post %d to move it next to.', $target, $id )
+			);
+		}
+
+		$result = [
+			'id'         => $id,
+			'element_id' => $element_id,
+			'where'      => $where,
+			'moved'      => 1 + count( self::ids( (array) ( $moving['elements'] ?? [] ) ) ),
+			'dry_run'    => $dry,
+		];
+		if ( '' !== $target ) {
+			$result['target'] = $target;
+		}
+
+		if ( $dry ) {
+			$result['status'] = 'would_move';
+			$result['note']   = 'Nothing was written. Pass dry_run false to apply.';
+			return $result;
+		}
+
+		$json = wp_json_encode( $data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+		if ( false === $json ) {
+			return new \WP_Error( 'niranzwp_encode_failed', 'Could not encode the layout.' );
+		}
+
+		$result['checkpoint_id'] = Checkpoint::before_post( $id, 'elementor-move' );
+		update_post_meta( $id, '_elementor_data', wp_slash( $json ) );
+
+		if ( class_exists( '\Elementor\Plugin' ) ) {
+			\Elementor\Plugin::$instance->files_manager->clear_cache();
+			$result['css_cache_cleared'] = true;
+		}
+		clean_post_cache( $id );
+
+		$result['status'] = 'moved';
 		return $result;
 	}
 
