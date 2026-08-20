@@ -66,13 +66,28 @@ final class Connections {
 
 	public static function handle_revoke_oauth(): void {
 		$client = isset( $_GET['client'] ) ? sanitize_text_field( wp_unslash( $_GET['client'] ) ) : '';
+		$family = isset( $_GET['family'] ) ? sanitize_text_field( wp_unslash( $_GET['family'] ) ) : '';
 
-		if ( ! current_user_can( CAPABILITY ) || ! check_admin_referer( self::NONCE_OAUTH . $client ) ) {
+		/*
+		 * The nonce covers both, so a link built for one row cannot be edited
+		 * into a link that ends a different connection.
+		 */
+		if ( ! current_user_can( CAPABILITY ) || ! check_admin_referer( self::NONCE_OAUTH . $client . $family ) ) {
 			wp_die( esc_html__( 'You are not allowed to do that.', 'niranzwp' ), '', [ 'response' => 403 ] );
 		}
 
-		if ( $client && class_exists( '\NiranzWP\OAuth' ) ) {
-			OAuth::revoke_client( get_current_user_id(), $client );
+		if ( class_exists( '\NiranzWP\OAuth' ) ) {
+			/*
+			 * The family is one approval, which is what a row on this screen
+			 * stands for. Falling back to the client id would end every
+			 * connection the same tool holds - right only for a record old
+			 * enough to predate families, which has no family to name.
+			 */
+			if ( '' !== $family ) {
+				OAuth::revoke_family( get_current_user_id(), $family );
+			} elseif ( '' !== $client ) {
+				OAuth::revoke_client( get_current_user_id(), $client );
+			}
 		}
 
 		wp_safe_redirect( add_query_arg( 'revoked', '1', admin_url( 'admin.php?page=niranzwp-connections' ) ) );
@@ -155,9 +170,13 @@ final class Connections {
 
 			foreach ( $grants as $g ) {
 				$client = (string) $g['client_id'];
+				$family = (string) ( $g['family'] ?? '' );
 				$revoke = wp_nonce_url(
-					admin_url( 'admin-post.php?action=niranzwp_revoke_oauth&client=' . rawurlencode( $client ) ),
-					self::NONCE_OAUTH . $client
+					admin_url(
+						'admin-post.php?action=niranzwp_revoke_oauth&client=' . rawurlencode( $client )
+						. '&family=' . rawurlencode( $family )
+					),
+					self::NONCE_OAUTH . $client . $family
 				);
 
 				printf(

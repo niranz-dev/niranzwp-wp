@@ -441,10 +441,56 @@ final class OAuth {
 		$refresh = bin2hex( random_bytes( 32 ) );
 
 		$tokens = self::tokens( $user_id );
+		$now    = time();
+
+		/*
+		 * A rotation mints a new record, so its own 'created' is the moment the
+		 * refresh happened - not the moment the person approved the tool. The
+		 * screen wants the second one, or every connection reads as if it were
+		 * made an hour ago. Read it off any surviving record in the family,
+		 * before the filter below removes the retired one it may be sitting on.
+		 */
+		$family_created = $now;
+		if ( '' !== $family ) {
+			foreach ( $tokens as $t ) {
+				if ( (string) ( $t['family'] ?? '' ) === $family ) {
+					$family_created = (int) ( $t['family_created'] ?? $t['created'] ?? $now );
+					break;
+				}
+			}
+		}
+
+		/*
+		 * One live refresh token per family, enforced here rather than trusted
+		 * to each path that mints one.
+		 *
+		 * The retry case is why this is needed. When a reply is lost the client
+		 * presents the same token again, and the site cannot send the same
+		 * answer back - it kept only hashes, so it no longer has the token it
+		 * issued. It has to mint another. That left the first one live and
+		 * unclaimed for thirty days, and a connection used for two days had
+		 * collected five of them.
+		 *
+		 * Retired rather than deleted, so a client that did receive the earlier
+		 * reply is told its token was superseded instead of that it never
+		 * existed - and so a real theft still trips the reuse check.
+		 */
+		if ( '' !== $family ) {
+			foreach ( $tokens as $i => $t ) {
+				if ( (string) ( $t['family'] ?? '' ) !== $family || ! empty( $t['retired'] ) ) {
+					continue;
+				}
+				$tokens[ $i ]['retired']         = $now;
+				$tokens[ $i ]['refresh_expires'] = $now + self::REUSE_WINDOW;
+				$tokens[ $i ]['access_expires']  = min(
+					(int) ( $t['access_expires'] ?? 0 ),
+					$now + self::ROTATION_GRACE
+				);
+			}
+		}
 
 		// Drop anything already dead, then cap. Without this the meta row grows
 		// for the life of the site.
-		$now    = time();
 		$tokens = array_values( array_filter(
 			$tokens,
 			static fn( array $t ): bool => (int) ( $t['refresh_expires'] ?? 0 ) > $now
@@ -456,6 +502,7 @@ final class OAuth {
 		$tokens[] = [
 			'client_id'       => $client_id,
 			'family'          => $family,
+			'family_created'  => $family_created,
 			'access'          => hash( 'sha256', $access ),
 			'refresh'         => hash( 'sha256', $refresh ),
 			'access_expires'  => $now + self::ACCESS_TTL,
@@ -591,36 +638,104 @@ final class OAuth {
 	 */
 	public static function connections( int $user_id ): array {
 		$clients = self::clients();
-		$out     = [];
+		$rows    = [];
 
 		foreach ( self::list_tokens( $user_id ) as $t ) {
+			/*
+			 * A retired record is a spent refresh token, kept for a day only so
+			 * that a second presentation can be told from a token the site never
+			 * issued. It is not something anyone is connected with, and listing
+			 * it says the opposite.
+			 */
+			if ( ! empty( $t['retired'] ) ) {
+				continue;
+			}
+
+			/*
+			 * One row per family, not per token. A family is one approval; every
+			 * refresh after it mints a fresh pair and retires the old, so a tool
+			 * that has been in use for a week has left a trail of records behind
+			 * one connection. Listing them per token turned a single CLI into
+			 * eleven entries, all named the same, none of which the reader could
+			 * tell apart or act on separately.
+			 *
+			 * Records from before families were stored fall back to their own
+			 * created time, which keeps them visible and separate rather than
+			 * silently merging them into one another.
+			 */
+			$family    = (string) ( $t['family'] ?? '' );
+			$key       = '' !== $family ? 'f:' . $family : 't:' . (int) ( $t['created'] ?? 0 );
 			$client_id = (string) ( $t['client_id'] ?? '' );
-			$out[]     = [
+
+			$created   = (int) ( $t['family_created'] ?? $t['created'] ?? 0 );
+			$last_used = (int) ( $t['last_used'] ?? 0 );
+			$expires   = (int) ( $t['refresh_expires'] ?? 0 );
+
+			if ( isset( $rows[ $key ] ) ) {
+				// Oldest approval, newest use, latest expiry: what is true of the
+				// connection rather than of whichever record happened to be last.
+				$created   = min( $rows[ $key ]['created'] ?: $created, $created ?: $rows[ $key ]['created'] );
+				$last_used = max( $rows[ $key ]['last_used'], $last_used );
+				$expires   = max( $rows[ $key ]['expires'], $expires );
+			}
+
+			$rows[ $key ] = [
 				'client_id' => $client_id,
+				'family'    => $family,
 				'name'      => (string) ( $clients[ $client_id ]['name'] ?? 'Unnamed client' ),
-				'created'   => (int) ( $t['created'] ?? 0 ),
-				'last_used' => (int) ( $t['last_used'] ?? 0 ),
-				'expires'   => (int) ( $t['refresh_expires'] ?? 0 ),
+				'created'   => $created,
+				'last_used' => $last_used,
+				'expires'   => $expires,
 			];
 		}
 
-		usort( $out, static fn( array $a, array $b ): int => $b['created'] <=> $a['created'] );
+		$out = array_values( $rows );
+		usort( $out, static fn( array $a, array $b ): int => $b['last_used'] <=> $a['last_used'] );
 		return $out;
 	}
 
 	/**
-	 * Revoke one connection.
+	 * Revoke every connection belonging to one client.
 	 *
 	 * Matched on the client id rather than on a position in the array, because
 	 * the list is filtered and re-sorted before it reaches the screen and a row
-	 * index there means nothing here. Returns how many grants went, since one
-	 * client that connected twice holds two.
+	 * index there means nothing here. Returns how many records went.
+	 *
+	 * This is the blunt one, and it is only right when the reader means "this
+	 * tool, entirely". A screen showing one row per connection wants
+	 * revoke_family() instead, or revoking the row a person pointed at takes
+	 * every other connection of the same tool down with it.
 	 */
 	public static function revoke_client( int $user_id, string $client_id ): int {
 		$tokens = self::tokens( $user_id );
 		$kept   = array_values( array_filter(
 			$tokens,
 			static fn( array $t ): bool => (string) ( $t['client_id'] ?? '' ) !== $client_id
+		) );
+
+		$gone = count( $tokens ) - count( $kept );
+		if ( $gone > 0 ) {
+			update_user_meta( $user_id, self::TOKEN_META, $kept );
+		}
+		return $gone;
+	}
+
+	/**
+	 * Revoke one connection: every token descended from a single approval.
+	 *
+	 * Retired records go too. They are spent and cannot be exchanged, but the
+	 * person asked for this connection to end, and leaving anything behind that
+	 * carries its family is not that.
+	 */
+	public static function revoke_family( int $user_id, string $family ): int {
+		if ( '' === $family ) {
+			return 0;
+		}
+
+		$tokens = self::tokens( $user_id );
+		$kept   = array_values( array_filter(
+			$tokens,
+			static fn( array $t ): bool => (string) ( $t['family'] ?? '' ) !== $family
 		) );
 
 		$gone = count( $tokens ) - count( $kept );
