@@ -24,18 +24,23 @@ final class Mcp {
 	public const NAMESPACE = 'mcp';
 	public const ROUTE     = 'niranzwp';
 
-	/** Abilities exposed as MCP tools. */
-	private const TOOLS = [
-		'niranzwp/site-info',
-		'niranzwp/list-plugins',
-		'niranzwp/autoload-report',
-		'niranzwp/purge-cache',
-		'niranzwp/seo-audit',
-		'niranzwp/seo-list-missing',
-		'niranzwp/seo-set-meta',
-		'niranzwp/media-set-alt',
-		'niranzwp/geo-check',
-		'niranzwp/geo-llms-txt',
+	/**
+	 * Abilities never offered over MCP, whatever else is switched on.
+	 *
+	 * Not because they are dangerous - the file and runtime abilities are
+	 * already behind their own toggles, and a site that has turned those on
+	 * has said what it meant. These are left out because they are about this
+	 * plugin rather than about the site: an MCP client has its own way to undo
+	 * work and its own instructions, and does not need ours.
+	 */
+	private const PRIVATE_TO_THE_PLUGIN = [
+		'niranzwp/checkpoint-create',
+		'niranzwp/checkpoint-list',
+		'niranzwp/checkpoint-restore',
+		'niranzwp/checkpoint-verify',
+		'niranzwp/checkpoint-delete',
+		'niranzwp/skill-write',
+		'niranzwp/skill-delete',
 	];
 
 	public static function init(): void {
@@ -118,15 +123,42 @@ final class Mcp {
 			self::NAMESPACE,
 			self::ROUTE,
 			'NiranzWP',
-			'SEO, GEO and maintenance abilities for this WordPress site.',
+			'Read and change this WordPress site: SEO, content, page design, maintenance.',
 			'v' . VERSION,
 			[ $transport ],
 			$errors,
 			$observability,
-			self::TOOLS,
+			self::tools(),
 			[],
 			[]
 		);
+	}
+
+	/**
+	 * The abilities to offer as MCP tools.
+	 *
+	 * This was a hand-written list, and a hand-written list goes stale: every
+	 * ability added after it was written was reachable over the CLI and
+	 * invisible over MCP, which is how a client ended up seeing ten tools on a
+	 * site that had sixty-five. It is now read from what is actually
+	 * registered, so an ability is exposed by existing rather than by being
+	 * remembered.
+	 *
+	 * @return string[]
+	 */
+	private static function tools(): array {
+		if ( ! function_exists( 'wp_get_abilities' ) ) {
+			return [];
+		}
+
+		$names = array_filter(
+			array_keys( (array) wp_get_abilities() ),
+			static fn( string $name ): bool => str_starts_with( $name, 'niranzwp/' )
+				&& ! in_array( $name, self::PRIVATE_TO_THE_PLUGIN, true )
+		);
+
+		sort( $names );
+		return array_values( $names );
 	}
 
 	/** Where an MCP client should point, once abilities are enabled. */

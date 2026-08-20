@@ -56,6 +56,11 @@ const INPUTS = {
 	'niranzwp/block-type': { name: 'core/paragraph' },
 	'niranzwp/block-read': { id: 1 },
 	'niranzwp/block-write': '@roundtrip',
+	'niranzwp/block-find': { id: 1, name: 'core/paragraph' },
+	// Both act on one block and both are exercised for real below, against a
+	// post this sweep writes and puts back.
+	'niranzwp/block-update': '@roundtrip',
+	'niranzwp/block-move': '@roundtrip',
 
 	'niranzwp/elementor-status': {},
 	// Resolved at runtime to a page that actually has _elementor_data, since a
@@ -256,6 +261,65 @@ for (const name of discovered) {
 				detail: wrote.ok && changed && undone && restored
 					? 'wrote, verified, restored from its own checkpoint'
 					: `wrote=${wrote.ok} changed=${changed} undone=${undone} restored=${restored}`,
+			});
+
+			await cli(['post', 'delete', id, '--force', '--yes']);
+		}
+	}
+
+	/* ------------------------------------------- block-update and block-move */
+	{
+		const made = await cli(['post', 'create', '--title', 'sweep block-edit target', '--yes']);
+		const id = made.out.match(/created post (\d+)/)?.[1];
+
+		if (!id) {
+			for (const name of ['niranzwp/block-update', 'niranzwp/block-move']) {
+				results.push({ name, status: 'FAIL', detail: 'could not create a post to edit' });
+			}
+		} else {
+			const p = (text) => ({ name: 'core/paragraph', attributes: {}, innerHTML: `<p>${text}</p>` });
+			await cli(['run', 'niranzwp/block-write', '--input', JSON.stringify({
+				id: +id, mode: 'replace', dry_run: false,
+				blocks: [p('one'), p('two'), p('three')],
+			}), '--yes']);
+
+			// update: set an attribute on the middle block and read it back
+			const upd = await cli(['run', 'niranzwp/block-update', '--input', JSON.stringify({
+				id: +id, path: '1', attributes: { align: 'center' }, dry_run: false,
+			}), '--yes']);
+			const afterUpd = json(await cli(['run', 'niranzwp/block-read', '--input', JSON.stringify({ id: +id })]));
+			const applied = afterUpd?.blocks?.[1]?.attributes?.align === 'center';
+
+			const undone = await restore(json(upd)?.checkpoint_id);
+			const back = json(await cli(['run', 'niranzwp/block-read', '--input', JSON.stringify({ id: +id })]));
+			const cleared = back?.blocks?.[1]?.attributes?.align === undefined;
+
+			results.push({
+				name: 'niranzwp/block-update',
+				status: upd.ok && applied && undone && cleared ? 'ok' : 'FAIL',
+				detail: upd.ok && applied && undone && cleared
+					? 'set an attribute, verified, restored from its own checkpoint'
+					: `wrote=${upd.ok} applied=${applied} undone=${undone} cleared=${cleared}`,
+			});
+
+			// move: last block to the front, and check the order really changed
+			const order = (r) => (r?.blocks ?? []).map((b) => b.text).join('|');
+			const beforeMove = order(json(await cli(['run', 'niranzwp/block-read', '--input', JSON.stringify({ id: +id })])));
+			const mv = await cli(['run', 'niranzwp/block-move', '--input', JSON.stringify({
+				id: +id, from: '2', to: '0', position: 'before', dry_run: false,
+			}), '--yes']);
+			const afterMove = order(json(await cli(['run', 'niranzwp/block-read', '--input', JSON.stringify({ id: +id })])));
+			const moved = mv.ok && afterMove !== beforeMove && afterMove.startsWith('three');
+
+			const mvUndone = await restore(json(mv)?.checkpoint_id);
+			const mvBack = order(json(await cli(['run', 'niranzwp/block-read', '--input', JSON.stringify({ id: +id })])));
+
+			results.push({
+				name: 'niranzwp/block-move',
+				status: moved && mvUndone && mvBack === beforeMove ? 'ok' : 'FAIL',
+				detail: moved && mvUndone && mvBack === beforeMove
+					? 'moved a block, verified the order, restored from its own checkpoint'
+					: `moved=${moved} undone=${mvUndone} order_back=${mvBack === beforeMove}`,
 			});
 
 			await cli(['post', 'delete', id, '--force', '--yes']);
