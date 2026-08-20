@@ -128,6 +128,15 @@ final class Admin {
 		// to send someone to without adding a menu row nobody navigates to.
 		self::no_frames( add_submenu_page( null, __( 'Connect a tool', 'niranzwp' ), __( 'Connect a tool', 'niranzwp' ), CAPABILITY, self::SLUG . '-connect', [ self::class, 'render_connect' ] ) );
 		self::no_frames( add_submenu_page( null, __( 'Set up NiranzWP', 'niranzwp' ), __( 'Set up NiranzWP', 'niranzwp' ), CAPABILITY, self::SLUG . '-setup', [ self::class, 'render_setup' ] ) );
+		/*
+		 * The OAuth authorization endpoint. An admin page rather than a REST
+		 * route, because REST does not take a cookie as proof of anything
+		 * without a nonce - so a browser arriving from a connector read as
+		 * logged out no matter how long the person had been in wp-admin.
+		 * Reaching this page means WordPress has already established who is
+		 * asking, and it handles the login bounce itself.
+		 */
+		self::no_frames( add_submenu_page( null, __( 'Authorize', 'niranzwp' ), __( 'Authorize', 'niranzwp' ), CAPABILITY, self::SLUG . '-oauth-authorize', [ OAuth::class, 'render_authorize' ] ) );
 	}
 
 	/**

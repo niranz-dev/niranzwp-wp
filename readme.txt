@@ -4,7 +4,7 @@ Tags: cli, rest-api, abilities, seo, automation
 Requires at least: 6.9
 Tested up to: 7.0.4
 Requires PHP: 8.0
-Stable tag: 5.3.20
+Stable tag: 5.3.21
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -104,6 +104,14 @@ or capturable, and wp-admin and wp-includes cannot be written to.
 3. Check NiranzWP > Troubleshoot if anything looks wrong.
 
 == Changelog ==
+
+= 5.3.21 =
+* Fixed: the authorization endpoint has moved out of /wp-json and into
+  wp-admin. A REST request does not accept a cookie as proof of anything
+  without a nonce, so a browser arriving from a connector read as logged out
+  however long its owner had been sitting in wp-admin - and was sent to log in
+  again, every time. An admin page is the cookie context, and WordPress handles
+  the login bounce itself. The old REST address still works and forwards.
 
 = 5.3.20 =
 * Reverted 5.3.16. Making the issuer follow the path the document was found

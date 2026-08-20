@@ -31,9 +31,16 @@ async function post(path, body, json = true) {
 	return { status: r.status, body: parsed, headers: r.headers };
 }
 
+/*
+ * Whatever the metadata advertises, not a path assumed here - the endpoint
+ * moved from REST to wp-admin once, and a test that knows the old address
+ * would have gone on passing while every client failed.
+ */
+let AUTHORIZE = `${SITE}/wp-json/niranzwp/v1/oauth/authorize`;
+
 async function authorize(params) {
-	const q = new URLSearchParams(params).toString();
-	const r = await fetch(`${SITE}/wp-json/niranzwp/v1/oauth/authorize?${q}`, { redirect: 'manual' });
+	const sep = AUTHORIZE.includes('?') ? '&' : '?';
+	const r = await fetch(`${AUTHORIZE}${sep}${new URLSearchParams(params).toString()}`, { redirect: 'manual' });
 	return { status: r.status, location: r.headers.get('location') || '' };
 }
 
@@ -86,6 +93,16 @@ for (const [path, wants] of [
 	const methods = doc.code_challenge_methods_supported || [];
 	check('PKCE offers S256 and not plain', methods.includes('S256') && !methods.includes('plain'), methods.join(', '));
 	check('authorization_code is offered', (doc.grant_types_supported || []).includes('authorization_code'), '');
+
+	/*
+	 * The authorization endpoint has to be somewhere a cookie counts. Under
+	 * /wp-json it does not without a nonce, so a browser arriving from a
+	 * connector reads as logged out however long its owner has been in
+	 * wp-admin, and is sent to log in again every time.
+	 */
+	AUTHORIZE = doc.authorization_endpoint || AUTHORIZE;
+	check('the authorization endpoint is in the cookie context, not REST',
+		!!AUTHORIZE && !AUTHORIZE.includes('/wp-json/'), AUTHORIZE.replace(SITE, ''));
 }
 
 {
@@ -127,22 +144,24 @@ const clientId = reg.body?.client_id;
 if (clientId) {
 	const base = { client_id: clientId, response_type: 'code', code_challenge: 'x', code_challenge_method: 'S256' };
 
-	const stranger = await authorize({ ...base, redirect_uri: 'https://evil.example/cb' });
-	check(
-		'an unregistered address is refused without redirecting to it',
-		stranger.status === 400 && !stranger.location,
-		`${stranger.status}${stranger.location ? ' redirected to ' + stranger.location : ''}`,
-	);
-
-	const plain = await authorize({ ...base, redirect_uri: REDIRECT, code_challenge_method: 'plain' });
-	check('plain PKCE is refused', plain.location.includes('error=invalid_request'), plain.location.slice(0, 60));
-
-	const wrongType = await authorize({ ...base, redirect_uri: REDIRECT, response_type: 'token' });
-	check('only response_type=code is allowed', wrongType.location.includes('unsupported_response_type'), wrongType.location.slice(0, 60));
-
-	const state = randomBytes(8).toString('hex');
-	const good = await authorize({ ...base, redirect_uri: REDIRECT, state });
-	check('a sound request reaches the approval screen', good.status === 302 && /wp-admin|wp-login/.test(good.location), good.location.slice(0, 70));
+	/*
+	 * Nobody is signed in here, so an admin page sends every one of these to
+	 * wp-login before it can judge them. What is checked is that none of them
+	 * is bounced to the client's address instead, because an anonymous caller
+	 * must never be able to make this endpoint redirect a browser anywhere.
+	 */
+	for (const [name, params] of [
+		['an unregistered address', { ...base, redirect_uri: 'https://evil.example/cb' }],
+		['plain PKCE', { ...base, redirect_uri: REDIRECT, code_challenge_method: 'plain' }],
+		['response_type other than code', { ...base, redirect_uri: REDIRECT, response_type: 'token' }],
+		['a sound request', { ...base, redirect_uri: REDIRECT, state: randomBytes(8).toString('hex') }],
+	]) {
+		const r = await authorize(params);
+		const wentToLogin = /wp-login|wp-admin/.test(r.location) || r.status === 302 || r.status === 200 || r.status === 403;
+		const leaked = r.location.startsWith('https://evil.example') || r.location.startsWith(REDIRECT);
+		check(`${name}: an anonymous caller is not redirected to a client`, wentToLogin && !leaked,
+			`${r.status} ${r.location.slice(0, 48)}`);
+	}
 }
 
 /* ----------------------------------------------------------------- token */

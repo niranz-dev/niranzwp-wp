@@ -179,7 +179,16 @@ final class OAuth {
 			[
 				'issuer'                                => untrailingslashit( home_url() ),
 				'registration_endpoint'                 => rest_url( self::NS . '/oauth/register' ),
-				'authorization_endpoint'                => rest_url( self::NS . '/oauth/authorize' ),
+				/*
+				 * In wp-admin, not under /wp-json. A REST request does not take
+				 * a cookie as proof of anything without a nonce, so a browser
+				 * arriving from a connector reads as logged out however long
+				 * the person has been sitting in wp-admin - and gets sent to
+				 * log in again, every time. An admin page is the cookie
+				 * context; WordPress handles the login bounce itself, and
+				 * comes back with the query string intact.
+				 */
+				'authorization_endpoint'                => admin_url( 'admin.php?page=niranzwp-oauth-authorize' ),
 				'device_authorization_endpoint'         => rest_url( self::NS . '/oauth/device' ),
 				'token_endpoint'                        => rest_url( self::NS . '/oauth/token' ),
 				'response_types_supported'              => [ 'code' ],
@@ -270,9 +279,14 @@ final class OAuth {
 			'callback' => [ self::class, 'token' ],
 		] ) );
 
+		/*
+		 * Kept for anything that already knows this address. The endpoint that
+		 * is advertised is the admin one; this forwards to it rather than
+		 * being a second implementation to keep in step.
+		 */
 		register_rest_route( self::NS, '/oauth/authorize', array_merge( $open, [
 			'methods'  => 'GET',
-			'callback' => [ self::class, 'authorize' ],
+			'callback' => [ self::class, 'forward_to_admin_authorize' ],
 		] ) );
 	}
 
@@ -1192,45 +1206,102 @@ final class OAuth {
 	 * redirecting to it, or the endpoint becomes a way to bounce a browser
 	 * anywhere.
 	 */
-	public static function authorize( \WP_REST_Request $r ) {
+	/** @param \WP_REST_Request $r The request. */
+	public static function forward_to_admin_authorize( \WP_REST_Request $r ) {
+		$query = $r->get_query_params();
+		return self::redirect( add_query_arg( $query, admin_url( 'admin.php?page=niranzwp-oauth-authorize' ) ) );
+	}
+
+	/**
+	 * The authorization endpoint, run from wp-admin.
+	 *
+	 * Reaching this page at all means WordPress has already established who is
+	 * asking, because an admin page cannot be reached otherwise - which is the
+	 * whole reason it is here rather than under /wp-json.
+	 */
+	public static function render_authorize(): void {
+		$params = [];
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		foreach ( [ 'client_id', 'redirect_uri', 'response_type', 'state', 'code_challenge', 'code_challenge_method', 'scope' ] as $key ) {
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			$params[ $key ] = isset( $_GET[ $key ] ) ? sanitize_text_field( wp_unslash( (string) $_GET[ $key ] ) ) : '';
+		}
+
+		$result = self::authorize_from( $params );
+
+		if ( is_wp_error( $result ) ) {
+			wp_die(
+				esc_html( $result->get_error_message() ),
+				esc_html__( 'Cannot connect', 'niranzwp' ),
+				[ 'response' => 400, 'back_link' => true ]
+			);
+		}
+
+		// Not wp_safe_redirect(): on refusal the destination is the client's
+		// own registered address, which is the point of the grant.
+		wp_redirect( $result ); // phpcs:ignore WordPress.Security.SafeRedirect.wp_redirect_wp_redirect
+		exit;
+	}
+
+	/**
+	 * Check an authorization request and say where the browser goes next.
+	 *
+	 * Everything the endpoint does apart from being an endpoint, so the admin
+	 * page and the REST route it replaced cannot drift apart.
+	 *
+	 * @param array<string,string> $params The query as given.
+	 * @return string|\WP_Error A URL to send the browser to, or a refusal that
+	 *                          must not be reported by redirecting.
+	 */
+	private static function authorize_from( array $params ) {
 		if ( ! self::transport_is_safe() ) {
-			return self::insecure_transport();
+			return new \WP_Error( 'insecure_transport', 'This endpoint needs HTTPS.' );
 		}
 		if ( ! Settings::active() ) {
-			return self::error( 'access_denied', 'Abilities are switched off on this site.', 403 );
+			return new \WP_Error( 'access_denied', 'AI abilities are switched off on this site.' );
 		}
 
-		$client_id = (string) $r->get_param( 'client_id' );
+		$client_id = (string) ( $params['client_id'] ?? '' );
 		$client    = self::clients()[ $client_id ] ?? null;
 		if ( ! $client ) {
-			return self::error( 'invalid_client', 'Unknown client_id. Register first.', 400 );
+			return new \WP_Error( 'invalid_client', 'That client is not registered on this site. Ask the tool to connect again.' );
 		}
 
-		$redirect_uri = (string) $r->get_param( 'redirect_uri' );
+		/*
+		 * Refused here rather than reported by redirecting to it. An address
+		 * this client did not register is an address this site has no reason
+		 * to send a browser to, and doing so would make this endpoint a way to
+		 * bounce a browser anywhere.
+		 */
+		$redirect_uri = (string) ( $params['redirect_uri'] ?? '' );
 		$registered   = (array) ( $client['redirect_uris'] ?? [] );
 		if ( ! $registered ) {
-			return self::error( 'invalid_request', 'This client registered no redirect_uris, so it cannot use the browser grant.', 400 );
+			return new \WP_Error( 'invalid_request', 'That client registered no redirect address, so it cannot use this flow.' );
 		}
 		if ( ! in_array( $redirect_uri, $registered, true ) ) {
-			return self::error( 'invalid_request', 'That redirect_uri is not one this client registered.', 400 );
+			return new \WP_Error( 'invalid_request', 'That redirect address is not one this client registered.' );
 		}
 
-		// From here on the client and its address are known, so a problem can
-		// safely be reported by redirecting - which is what a client expects.
-		$state = (string) $r->get_param( 'state' );
+		// The client and its address are known now, so anything further wrong
+		// can be reported the way a client expects: by redirecting back to it.
+		$state = (string) ( $params['state'] ?? '' );
 
-		if ( 'code' !== (string) $r->get_param( 'response_type' ) ) {
-			return self::bounce( $redirect_uri, [ 'error' => 'unsupported_response_type' ], $state );
+		if ( 'code' !== (string) ( $params['response_type'] ?? '' ) ) {
+			return self::redirect_url( $redirect_uri, [ 'error' => 'unsupported_response_type' ], $state );
 		}
 
-		$challenge = (string) $r->get_param( 'code_challenge' );
-		$method    = (string) ( $r->get_param( 'code_challenge_method' ) ?: 'plain' );
+		$challenge = (string) ( $params['code_challenge'] ?? '' );
+		$method    = (string) ( $params['code_challenge_method'] ?? '' );
 		if ( '' === $challenge || 'S256' !== $method ) {
-			return self::bounce(
+			return self::redirect_url(
 				$redirect_uri,
 				[ 'error' => 'invalid_request', 'error_description' => 'code_challenge with code_challenge_method=S256 is required.' ],
 				$state
 			);
+		}
+
+		if ( ! current_user_can( CAPABILITY ) ) {
+			return self::redirect_url( $redirect_uri, [ 'error' => 'access_denied' ], $state );
 		}
 
 		$request_id = bin2hex( random_bytes( 16 ) );
@@ -1246,33 +1317,7 @@ final class OAuth {
 			self::AUTHZ_TTL
 		);
 
-		$screen = add_query_arg( 'authorize', $request_id, admin_url( 'admin.php?page=niranzwp-connect' ) );
-
-		/*
-		 * This is a REST route, and a REST request does not accept a cookie as
-		 * proof of anything without a nonce - so is_user_logged_in() is false
-		 * for someone sitting in wp-admin in the very next tab, and they were
-		 * being sent to log in again when they already had.
-		 *
-		 * The cookie is read here directly, and only to decide which page to
-		 * send a browser to. It authorises nothing: the approval itself is a
-		 * nonce-checked POST from wp-admin, so a forged link to this endpoint
-		 * still ends at a screen asking a person to say yes.
-		 */
-		if ( ! is_user_logged_in() ) {
-			$cookie_user = wp_validate_auth_cookie( '', 'logged_in' );
-			if ( $cookie_user ) {
-				wp_set_current_user( (int) $cookie_user );
-			}
-		}
-
-		// Not logged in, or logged in as someone who cannot manage the site:
-		// let WordPress ask, and come back here afterwards.
-		if ( ! is_user_logged_in() || ! current_user_can( CAPABILITY ) ) {
-			$screen = wp_login_url( $screen );
-		}
-
-		return self::redirect( $screen );
+		return add_query_arg( 'authorize', $request_id, admin_url( 'admin.php?page=niranzwp-connect' ) );
 	}
 
 	/** What the approval screen needs to describe a pending browser request. */
@@ -1385,11 +1430,6 @@ final class OAuth {
 			$args['state'] = $state;
 		}
 		return add_query_arg( array_map( 'rawurlencode', $args ), $base );
-	}
-
-	/** The same, as a response. */
-	private static function bounce( string $base, array $args, string $state ): \WP_REST_Response {
-		return self::redirect( self::redirect_url( $base, $args, $state ) );
 	}
 
 	private static function redirect( string $to ): \WP_REST_Response {
