@@ -383,7 +383,7 @@ final class Performance {
 
 		register_ability( 'niranzwp/db-cleanup', [
 			'label'               => __( 'Database cleanup', 'niranzwp' ),
-			'description'         => __( 'Removes what db-report found. Previews unless dry_run is false. A checkpoint cannot cover this — snapshotting the rows would cost more than removing them — so read the preview first.', 'niranzwp' ),
+			'description'         => __( 'Removes what db-report found. Previews unless dry_run is false. A snapshot cannot cover this — copying the rows aside would cost more than removing them — so read the preview first.', 'niranzwp' ),
 			'category'            => 'niranzwp-performance',
 			'input_schema'        => [
 				'type'       => 'object',

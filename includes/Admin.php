@@ -434,8 +434,8 @@ final class Admin {
 			'id'     => 'niranzwp-checkpoints',
 			'parent' => 'niranzwp-on',
 			'title'  => sprintf(
-				/* translators: %d: number of checkpoints kept. */
-				_n( '%d checkpoint kept', '%d checkpoints kept', $checkpoints, 'niranzwp' ),
+				/* translators: %d: number of snapshots kept. */
+				_n( '%d snapshot kept', '%d snapshots kept', $checkpoints, 'niranzwp' ),
 				$checkpoints
 			),
 			'href'   => admin_url( 'admin.php?page=' . self::SLUG . '-checkpoints' ),
@@ -1431,7 +1431,7 @@ final class Admin {
 					</label>
 				</p>
 				<p class="nzwp-desc">
-					<?php esc_html_e( 'Abilities are admin-only, and the write ones preview before they change anything. They are still real access to this site, so leave this off unless something is connecting.', 'niranzwp' ); ?>
+					<?php esc_html_e( 'Abilities are admin-only, and most of the write ones show what would change before doing it. Not all: a few act straight away. They are real access to this site, so leave this off unless something is connecting.', 'niranzwp' ); ?>
 				</p>
 				<p class="nzwp-desc">
 					<?php esc_html_e( 'Access is locked to this domain. Restoring the database elsewhere will not carry it over.', 'niranzwp' ); ?>

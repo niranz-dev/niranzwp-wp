@@ -499,8 +499,8 @@ final class Checkpoint {
 		$rm = [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => false, 'destructive' => true, 'idempotent' => true ] ];
 
 		register_ability( 'niranzwp/checkpoint-create', [
-			'label'               => __( 'Create checkpoint', 'niranzwp' ),
-			'description'         => __( 'Snapshots the current state of the given files, posts and options so a later change can be rolled back. Not a substitute for a host backup.', 'niranzwp' ),
+			'label'               => __( 'Create snapshot', 'niranzwp' ),
+			'description'         => __( 'Takes a snapshot of the given files, posts and options so a later change can be rolled back. Not a substitute for a host backup.', 'niranzwp' ),
 			'category'            => 'niranzwp-checkpoints',
 			'input_schema'        => [
 				'type'       => 'object',
@@ -518,8 +518,8 @@ final class Checkpoint {
 		] );
 
 		register_ability( 'niranzwp/checkpoint-list', [
-			'label'               => __( 'List checkpoints', 'niranzwp' ),
-			'description'         => __( 'Lists saved checkpoints, newest first.', 'niranzwp' ),
+			'label'               => __( 'List snapshots', 'niranzwp' ),
+			'description'         => __( 'Lists saved snapshots, newest first.', 'niranzwp' ),
 			'category'            => 'niranzwp-checkpoints',
 			'input_schema'        => [
 				'type'       => 'object',
@@ -532,8 +532,8 @@ final class Checkpoint {
 		] );
 
 		register_ability( 'niranzwp/checkpoint-restore', [
-			'label'               => __( 'Restore checkpoint', 'niranzwp' ),
-			'description'         => __( 'Puts the files, posts and options in a checkpoint back the way they were. Reports what would change unless dry_run is false.', 'niranzwp' ),
+			'label'               => __( 'Restore snapshot', 'niranzwp' ),
+			'description'         => __( 'Puts the files, posts and options in a snapshot back the way they were. Reports what would change unless dry_run is false.', 'niranzwp' ),
 			'category'            => 'niranzwp-checkpoints',
 			'input_schema'        => [
 				'type'       => 'object',
@@ -550,8 +550,8 @@ final class Checkpoint {
 		] );
 
 		register_ability( 'niranzwp/checkpoint-verify', [
-			'label'               => __( 'Verify checkpoint', 'niranzwp' ),
-			'description'         => __( 'Opens a checkpoint and reports whether it could actually be restored: that every file it claims is present, that the stored bytes decode to the size and hash recorded, that PHP still parses, and where the current file differs. A backup that cannot be checked is a hope rather than a backup - run this before relying on one, not after.', 'niranzwp' ),
+			'label'               => __( 'Verify snapshot', 'niranzwp' ),
+			'description'         => __( 'Opens a snapshot and reports whether it could actually be restored: that every file it claims is present, that the stored bytes decode to the size and hash recorded, that PHP still parses, and where the current file differs. A backup that cannot be checked is a hope rather than a backup - run this before relying on one, not after.', 'niranzwp' ),
 			'category'            => 'niranzwp-checkpoints',
 			'input_schema'        => [
 				'type'       => 'object',
@@ -565,8 +565,8 @@ final class Checkpoint {
 		] );
 
 		register_ability( 'niranzwp/checkpoint-delete', [
-			'label'               => __( 'Delete checkpoint', 'niranzwp' ),
-			'description'         => __( 'Permanently removes a saved checkpoint.', 'niranzwp' ),
+			'label'               => __( 'Delete snapshot', 'niranzwp' ),
+			'description'         => __( 'Permanently removes a saved snapshot.', 'niranzwp' ),
 			'category'            => 'niranzwp-checkpoints',
 			'input_schema'        => [
 				'type'       => 'object',

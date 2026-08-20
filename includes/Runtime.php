@@ -95,7 +95,7 @@ final class Runtime {
 	private static function guidance(): string {
 		return __( 'Evaluates PHP inside the loaded WordPress runtime and returns the value it produces, anything it printed, and any warning or error it raised. Equivalent to "wp eval". This is full control of the site.', 'niranzwp' )
 			. "\n" . ''
-			. "\n" . __( 'PREFER A DEDICATED ABILITY WHERE ONE EXISTS. Everything reached through here bypasses the guards the other abilities carry: write-file parses PHP before writing it, takes a checkpoint and arms the recovery guard; edit-file refuses an ambiguous match; delete-file and purge-cache preview by default. file_put_contents() called from here has none of that. Use write-file or create-upload-link for files, edit-file for a change inside one, block-write for post content, purge-cache for caches.', 'niranzwp' )
+			. "\n" . __( 'PREFER A DEDICATED ABILITY WHERE ONE EXISTS. Everything reached through here bypasses the guards the other abilities carry: write-file parses PHP before writing it, takes a snapshot and arms the recovery guard; edit-file refuses an ambiguous match; delete-file and purge-cache preview by default. file_put_contents() called from here has none of that. Use write-file or create-upload-link for files, edit-file for a change inside one, block-write for post content, purge-cache for caches.', 'niranzwp' )
 			. "\n" . ''
 			. "\n" . __( 'RULES:', 'niranzwp' )
 			. "\n" . __( '- No opening <?php tag; a leading one is stripped but do not send it.', 'niranzwp' )
