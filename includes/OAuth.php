@@ -37,6 +37,8 @@ final class OAuth {
 	private const CLIENTS      = 'niranzwp_oauth_clients';
 	private const TOKEN_META   = '_niranzwp_oauth_tokens';
 	private const DEVICE_TTL   = 600;    // ten minutes to type a code
+	private const AUTHZ_TTL    = 600;    // ten minutes to approve in the browser
+	private const CODE_TTL     = 60;     // one minute to exchange the code
 	private const ACCESS_TTL   = 3600;   // one hour
 	private const REFRESH_TTL  = 2592000; // thirty days
 	private const INTERVAL     = 5;
@@ -87,6 +89,14 @@ final class OAuth {
 	public static function init(): void {
 		add_action( 'rest_api_init', [ self::class, 'routes' ] );
 		add_action( 'parse_request', [ self::class, 'metadata_document' ] );
+		add_action( 'parse_request', [ self::class, 'protected_resource_document' ] );
+
+		/*
+		 * A 401 with no WWW-Authenticate is a dead end: the client is told no
+		 * and not told where to ask. This is the header that turns the refusal
+		 * into the first step of connecting.
+		 */
+		add_filter( 'rest_post_dispatch', [ self::class, 'challenge_header' ], 10, 3 );
 		add_filter( 'determine_current_user', [ self::class, 'authenticate' ], 30 );
 	}
 
@@ -108,15 +118,74 @@ final class OAuth {
 			[
 				'issuer'                                => untrailingslashit( home_url() ),
 				'registration_endpoint'                 => rest_url( self::NS . '/oauth/register' ),
+				'authorization_endpoint'                => rest_url( self::NS . '/oauth/authorize' ),
 				'device_authorization_endpoint'         => rest_url( self::NS . '/oauth/device' ),
 				'token_endpoint'                        => rest_url( self::NS . '/oauth/token' ),
+				'response_types_supported'              => [ 'code' ],
 				'grant_types_supported'                 => [
+					'authorization_code',
 					'urn:ietf:params:oauth:grant-type:device_code',
 					'refresh_token',
 				],
+				// S256 only. The spec also allows "plain", which sends the
+				// verifier in the same redirect as the code it is meant to
+				// protect and so protects nothing.
+				'code_challenge_methods_supported'      => [ 'S256' ],
 				'token_endpoint_auth_methods_supported' => [ 'none' ],
 				'scopes_supported'                      => [ 'abilities' ],
 				'service_documentation'                 => 'https://niranz.dev',
+			]
+		);
+	}
+
+	/**
+	 * Point an unauthenticated MCP caller at the discovery document.
+	 *
+	 * @param \WP_HTTP_Response $response Response about to be sent.
+	 * @param \WP_REST_Server   $server   Unused.
+	 * @param \WP_REST_Request  $request  The request being answered.
+	 * @return \WP_HTTP_Response
+	 */
+	public static function challenge_header( $response, $server, $request ) {
+		if ( ! $response instanceof \WP_HTTP_Response || 401 !== $response->get_status() ) {
+			return $response;
+		}
+		if ( ! str_starts_with( (string) $request->get_route(), '/' . Mcp::NAMESPACE . '/' ) ) {
+			return $response;
+		}
+
+		$response->header(
+			'WWW-Authenticate',
+			sprintf(
+				'Bearer realm="%s", resource_metadata="%s"',
+				esc_url_raw( home_url() ),
+				esc_url_raw( home_url( '/.well-known/oauth-protected-resource' ) )
+			)
+		);
+
+		return $response;
+	}
+
+	/**
+	 * RFC 9728, the other half of discovery.
+	 *
+	 * The authorization server document says how to get a token. This one says
+	 * which server to ask for this particular resource, and it is what a client
+	 * looks for after a 401 from the MCP endpoint.
+	 */
+	public static function protected_resource_document(): void {
+		$path = (string) wp_parse_url( (string) ( $_SERVER['REQUEST_URI'] ?? '' ), PHP_URL_PATH );
+		if ( '/.well-known/oauth-protected-resource' !== untrailingslashit( $path ) ) {
+			return;
+		}
+
+		wp_send_json(
+			[
+				'resource'                 => Mcp::endpoint(),
+				'authorization_servers'    => [ untrailingslashit( home_url() ) ],
+				'scopes_supported'         => [ 'abilities' ],
+				'bearer_methods_supported' => [ 'header' ],
+				'resource_documentation'   => 'https://niranz.dev',
 			]
 		);
 	}
@@ -137,6 +206,11 @@ final class OAuth {
 		register_rest_route( self::NS, '/oauth/token', array_merge( $open, [
 			'methods'  => 'POST',
 			'callback' => [ self::class, 'token' ],
+		] ) );
+
+		register_rest_route( self::NS, '/oauth/authorize', array_merge( $open, [
+			'methods'  => 'GET',
+			'callback' => [ self::class, 'authorize' ],
 		] ) );
 	}
 
@@ -202,25 +276,42 @@ final class OAuth {
 
 		$client_id = 'nzwp_' . bin2hex( random_bytes( 16 ) );
 
+		/*
+		 * The browser grant hands the authorization code to whatever address
+		 * the request names, so the addresses a client may name are fixed here,
+		 * at registration, and matched exactly later. Without that, anyone who
+		 * learns a client_id can point the redirect at their own server and
+		 * collect codes meant for someone else.
+		 */
+		$redirects = self::clean_redirect_uris( $r->get_param( 'redirect_uris' ) );
+		if ( is_wp_error( $redirects ) ) {
+			return self::error( 'invalid_redirect_uri', $redirects->get_error_message(), 400 );
+		}
+
 		$clients[ $client_id ] = [
-			'name'    => $name,
-			'created' => time(),
+			'name'          => $name,
+			'created'       => time(),
+			'redirect_uris' => $redirects,
 		];
 		update_option( self::CLIENTS, $clients, false );
 
-		return new \WP_REST_Response(
-			[
-				'client_id'                 => $client_id,
-				'client_name'               => $name,
-				'client_id_issued_at'       => time(),
-				'grant_types'               => [
-					'urn:ietf:params:oauth:grant-type:device_code',
-					'refresh_token',
-				],
-				'token_endpoint_auth_method' => 'none',
+		$body = [
+			'client_id'                  => $client_id,
+			'client_name'                => $name,
+			'client_id_issued_at'        => time(),
+			'grant_types'                => [
+				'authorization_code',
+				'urn:ietf:params:oauth:grant-type:device_code',
+				'refresh_token',
 			],
-			201
-		);
+			'response_types'             => [ 'code' ],
+			'token_endpoint_auth_method' => 'none',
+		];
+		if ( $redirects ) {
+			$body['redirect_uris'] = $redirects;
+		}
+
+		return new \WP_REST_Response( $body, 201 );
 	}
 
 	/* -------------------------------------------------------- device grant */
@@ -346,10 +437,13 @@ final class OAuth {
 		if ( 'urn:ietf:params:oauth:grant-type:device_code' === $grant ) {
 			return self::token_from_device( $r );
 		}
+		if ( 'authorization_code' === $grant ) {
+			return self::token_from_code( $r );
+		}
 		if ( 'refresh_token' === $grant ) {
 			return self::token_from_refresh( $r );
 		}
-		return self::error( 'unsupported_grant_type', 'Supported: device_code, refresh_token.', 400 );
+		return self::error( 'unsupported_grant_type', 'Supported: authorization_code, device_code, refresh_token.', 400 );
 	}
 
 	private static function token_from_device( \WP_REST_Request $r ) {
@@ -964,5 +1058,267 @@ final class OAuth {
 			[ 'error' => $code, 'error_description' => $description ],
 			$status
 		);
+	}
+	/* --------------------------------------------------- browser grant */
+
+	/*
+	 * The device grant exists because a terminal has no browser: a code is read
+	 * off the screen and typed into wp-admin. A connector is the other case -
+	 * it is already in a browser and has nowhere to show a code - so it needs
+	 * the redirect grant instead. Same approval, same tokens, different way of
+	 * getting the person in front of the question.
+	 */
+
+	/**
+	 * The redirect addresses a client is allowed to name, checked and cleaned.
+	 *
+	 * @param mixed $raw Whatever arrived as redirect_uris.
+	 * @return string[]|\WP_Error
+	 */
+	private static function clean_redirect_uris( mixed $raw ) {
+		if ( null === $raw || '' === $raw ) {
+			return [];
+		}
+		if ( ! is_array( $raw ) ) {
+			$raw = [ $raw ];
+		}
+		if ( count( $raw ) > 5 ) {
+			return new \WP_Error( 'too_many', 'At most five redirect_uris.' );
+		}
+
+		$out = [];
+		foreach ( $raw as $uri ) {
+			$uri   = trim( (string) $uri );
+			$parts = wp_parse_url( $uri );
+
+			if ( ! $uri || ! is_array( $parts ) || empty( $parts['scheme'] ) || empty( $parts['host'] ) ) {
+				return new \WP_Error( 'bad_uri', sprintf( '"%s" is not an absolute URL.', $uri ) );
+			}
+			if ( ! empty( $parts['fragment'] ) ) {
+				return new \WP_Error( 'bad_uri', 'A redirect_uri may not carry a fragment.' );
+			}
+
+			/*
+			 * https everywhere, with one exception: a client running on the
+			 * same machine as the browser, which cannot have a certificate.
+			 * That exception is loopback only - "localhost" as a name can be
+			 * pointed elsewhere by DNS or a hosts file.
+			 */
+			$loopback = in_array( strtolower( (string) $parts['host'] ), [ '127.0.0.1', '[::1]', '::1' ], true );
+			if ( 'https' !== strtolower( (string) $parts['scheme'] ) && ! ( 'http' === strtolower( (string) $parts['scheme'] ) && $loopback ) ) {
+				return new \WP_Error( 'bad_uri', sprintf( '"%s" must be https, or http on 127.0.0.1.', $uri ) );
+			}
+
+			$out[] = $uri;
+		}
+
+		return array_values( array_unique( $out ) );
+	}
+
+	/**
+	 * RFC 6749 step one for the browser grant.
+	 *
+	 * Sends the person to wp-admin to answer the question, having first checked
+	 * everything that can be checked without them. What cannot be answered
+	 * safely is answered here rather than at the redirect address: an unknown
+	 * client or an unregistered redirect_uri must never be reported by
+	 * redirecting to it, or the endpoint becomes a way to bounce a browser
+	 * anywhere.
+	 */
+	public static function authorize( \WP_REST_Request $r ) {
+		if ( ! self::transport_is_safe() ) {
+			return self::insecure_transport();
+		}
+		if ( ! Settings::active() ) {
+			return self::error( 'access_denied', 'Abilities are switched off on this site.', 403 );
+		}
+
+		$client_id = (string) $r->get_param( 'client_id' );
+		$client    = self::clients()[ $client_id ] ?? null;
+		if ( ! $client ) {
+			return self::error( 'invalid_client', 'Unknown client_id. Register first.', 400 );
+		}
+
+		$redirect_uri = (string) $r->get_param( 'redirect_uri' );
+		$registered   = (array) ( $client['redirect_uris'] ?? [] );
+		if ( ! $registered ) {
+			return self::error( 'invalid_request', 'This client registered no redirect_uris, so it cannot use the browser grant.', 400 );
+		}
+		if ( ! in_array( $redirect_uri, $registered, true ) ) {
+			return self::error( 'invalid_request', 'That redirect_uri is not one this client registered.', 400 );
+		}
+
+		// From here on the client and its address are known, so a problem can
+		// safely be reported by redirecting - which is what a client expects.
+		$state = (string) $r->get_param( 'state' );
+
+		if ( 'code' !== (string) $r->get_param( 'response_type' ) ) {
+			return self::bounce( $redirect_uri, [ 'error' => 'unsupported_response_type' ], $state );
+		}
+
+		$challenge = (string) $r->get_param( 'code_challenge' );
+		$method    = (string) ( $r->get_param( 'code_challenge_method' ) ?: 'plain' );
+		if ( '' === $challenge || 'S256' !== $method ) {
+			return self::bounce(
+				$redirect_uri,
+				[ 'error' => 'invalid_request', 'error_description' => 'code_challenge with code_challenge_method=S256 is required.' ],
+				$state
+			);
+		}
+
+		$request_id = bin2hex( random_bytes( 16 ) );
+		set_transient(
+			self::authz_key( $request_id ),
+			[
+				'client_id'    => $client_id,
+				'redirect_uri' => $redirect_uri,
+				'challenge'    => $challenge,
+				'state'        => $state,
+				'created'      => time(),
+			],
+			self::AUTHZ_TTL
+		);
+
+		$screen = add_query_arg( 'authorize', $request_id, admin_url( 'admin.php?page=niranzwp-connect' ) );
+
+		// Not logged in, or logged in as someone who cannot manage the site:
+		// let WordPress ask, and come back here afterwards.
+		if ( ! is_user_logged_in() || ! current_user_can( CAPABILITY ) ) {
+			$screen = wp_login_url( $screen );
+		}
+
+		return self::redirect( $screen );
+	}
+
+	/** What the approval screen needs to describe a pending browser request. */
+	public static function pending_authorization( string $request_id ): ?array {
+		$record = get_transient( self::authz_key( $request_id ) );
+		if ( ! is_array( $record ) ) {
+			return null;
+		}
+		$host = (string) wp_parse_url( (string) $record['redirect_uri'], PHP_URL_HOST );
+		return [
+			'client_name' => self::clients()[ $record['client_id'] ]['name'] ?? 'Unknown client',
+			'returns_to'  => $host,
+			'requested'   => (int) $record['created'],
+		];
+	}
+
+	/**
+	 * Called from the admin screen once a person has said yes or no.
+	 *
+	 * Returns the address to send the browser to, which is the client's own
+	 * redirect_uri either way: a refusal is an answer the client is waiting
+	 * for, not a dead end.
+	 *
+	 * @param string $request_id From the authorize redirect.
+	 * @param int    $user_id    Who approved.
+	 * @param bool   $allow      Whether they said yes.
+	 * @return string|null Null when the request is unknown or expired.
+	 */
+	public static function settle_authorization( string $request_id, int $user_id, bool $allow ): ?string {
+		$record = get_transient( self::authz_key( $request_id ) );
+		if ( ! is_array( $record ) ) {
+			return null;
+		}
+		delete_transient( self::authz_key( $request_id ) );
+
+		$state = (string) $record['state'];
+
+		if ( ! $allow ) {
+			return self::redirect_url( $record['redirect_uri'], [ 'error' => 'access_denied' ], $state );
+		}
+		if ( ! user_can( $user_id, CAPABILITY ) ) {
+			return self::redirect_url( $record['redirect_uri'], [ 'error' => 'access_denied' ], $state );
+		}
+
+		$code = bin2hex( random_bytes( 32 ) );
+		set_transient(
+			self::code_exchange_key( $code ),
+			[
+				'client_id'    => $record['client_id'],
+				'redirect_uri' => $record['redirect_uri'],
+				'challenge'    => $record['challenge'],
+				'user_id'      => $user_id,
+			],
+			self::CODE_TTL
+		);
+
+		return self::redirect_url( $record['redirect_uri'], [ 'code' => $code ], $state );
+	}
+
+	/** RFC 6749 step two: the code, plus proof the caller is who asked for it. */
+	private static function token_from_code( \WP_REST_Request $r ) {
+		$code      = (string) $r->get_param( 'code' );
+		$client_id = (string) $r->get_param( 'client_id' );
+		$verifier  = (string) $r->get_param( 'code_verifier' );
+
+		$record = $code ? get_transient( self::code_exchange_key( $code ) ) : false;
+
+		// One answer for unknown, expired, and belonging to another client, so
+		// this cannot be used to learn which codes existed.
+		if ( ! is_array( $record ) || $record['client_id'] !== $client_id ) {
+			return self::error( 'invalid_grant', 'That code is unknown or has expired. Start again.', 400 );
+		}
+
+		// One code, one exchange - whatever happens next.
+		delete_transient( self::code_exchange_key( $code ) );
+
+		if ( (string) $r->get_param( 'redirect_uri' ) !== $record['redirect_uri'] ) {
+			return self::error( 'invalid_grant', 'redirect_uri does not match the one the code was issued for.', 400 );
+		}
+
+		/*
+		 * PKCE. The code travelled in a URL - through the address bar, the
+		 * browser's history, and anything watching either - so the code alone
+		 * is not proof. The verifier never left the client.
+		 */
+		$expected = rtrim( strtr( base64_encode( hash( 'sha256', $verifier, true ) ), '+/', '-_' ), '=' );
+		if ( '' === $verifier || ! hash_equals( (string) $record['challenge'], $expected ) ) {
+			return self::error( 'invalid_grant', 'code_verifier does not match the challenge this code was issued for.', 400 );
+		}
+
+		$user_id = (int) $record['user_id'];
+		if ( ! $user_id || ! user_can( $user_id, CAPABILITY ) ) {
+			return self::error( 'invalid_grant', 'The approving user can no longer manage this site.', 403 );
+		}
+
+		return self::issue( $user_id, $client_id );
+	}
+
+	/* ------------------------------------------------------ small helpers */
+
+	/**
+	 * A redirect back to a client, as a URL.
+	 *
+	 * @param string               $base  The client's registered redirect_uri.
+	 * @param array<string,string> $args  What to report.
+	 * @param string               $state Echoed back untouched, per the spec.
+	 */
+	private static function redirect_url( string $base, array $args, string $state ): string {
+		if ( '' !== $state ) {
+			$args['state'] = $state;
+		}
+		return add_query_arg( array_map( 'rawurlencode', $args ), $base );
+	}
+
+	/** The same, as a response. */
+	private static function bounce( string $base, array $args, string $state ): \WP_REST_Response {
+		return self::redirect( self::redirect_url( $base, $args, $state ) );
+	}
+
+	private static function redirect( string $to ): \WP_REST_Response {
+		$response = new \WP_REST_Response( null, 302 );
+		$response->header( 'Location', $to );
+		$response->header( 'Cache-Control', 'no-store' );
+		return $response;
+	}
+
+	private static function authz_key( string $request_id ): string {
+		return 'nzwp_authz_' . hash( 'sha256', $request_id );
+	}
+
+	private static function code_exchange_key( string $code ): string {
+		return 'nzwp_code_' . hash( 'sha256', $code );
 	}
 }

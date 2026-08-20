@@ -20,6 +20,7 @@ final class Admin {
 	private const NONCE = 'niranzwp_save';
 	private const TOGGLE_NONCE = 'niranzwp_toggle';
 	private const APPROVE_NONCE = 'niranzwp_approve';
+	private const AUTHZ_NONCE   = 'niranzwp_authorize';
 
 	/** Set when the toolbar badge is added, read when its styles are printed. */
 	private static bool $badge_rendered = false;
@@ -29,6 +30,7 @@ final class Admin {
 		add_action( 'admin_post_niranzwp_save', [ self::class, 'handle_save' ] );
 		add_action( 'admin_post_niranzwp_toggle', [ self::class, 'handle_toggle' ] );
 		add_action( 'admin_post_niranzwp_approve', [ self::class, 'handle_approve' ] );
+		add_action( 'admin_post_niranzwp_authorize', [ self::class, 'handle_authorize' ] );
 		add_action( 'admin_notices', [ self::class, 'activation_notice' ] );
 		add_action( 'admin_bar_menu', [ self::class, 'admin_bar' ], 100 );
 		/*
@@ -186,6 +188,51 @@ final class Admin {
 				. '</p></div>';
 		}
 
+		/*
+		 * A connector comes through the browser rather than a terminal, so it
+		 * has no code to show and none to type. It arrives here with a request
+		 * id instead, and the only thing left to do is answer the question.
+		 */
+		$request_id = isset( $_GET['authorize'] ) ? sanitize_text_field( wp_unslash( (string) $_GET['authorize'] ) ) : '';
+		$asking     = '' !== $request_id ? OAuth::pending_authorization( $request_id ) : null;
+
+		if ( '' !== $request_id && ! $asking ) {
+			echo '<div class="notice notice-error"><p>'
+				. esc_html__( 'That request is not recognised, or it expired. Requests last ten minutes; ask the tool to connect again.', 'niranzwp' )
+				. '</p></div>';
+		}
+
+		if ( $asking ) {
+			?>
+			<div class="nzwp-card">
+				<h2><?php esc_html_e( 'Allow this connection?', 'niranzwp' ); ?></h2>
+				<p class="nzwp-desc" style="margin-top:0">
+					<?php
+					printf(
+						/* translators: 1: the name the client registered under, 2: the host it will be sent back to. */
+						esc_html__( '%1$s is asking to connect to this site, and will be sent back to %2$s.', 'niranzwp' ),
+						'<strong>' . esc_html( $asking['client_name'] ) . '</strong>',
+						'<code>' . esc_html( $asking['returns_to'] ) . '</code>'
+					);
+					?>
+				</p>
+				<p class="nzwp-desc">
+					<?php esc_html_e( 'Allowing it gives that tool everything you can do here. You can end it later on the Connections screen.', 'niranzwp' ); ?>
+				</p>
+
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<input type="hidden" name="action" value="niranzwp_authorize">
+					<input type="hidden" name="request_id" value="<?php echo esc_attr( $request_id ); ?>">
+					<?php wp_nonce_field( self::AUTHZ_NONCE ); ?>
+					<?php submit_button( __( 'Allow', 'niranzwp' ), 'primary', 'allow', false ); ?>
+					<?php submit_button( __( 'Deny', 'niranzwp' ), 'secondary', 'deny', false ); ?>
+				</form>
+			</div>
+			<?php
+			echo '</div>';
+			return;
+		}
+
 		$pending = '' !== $code ? OAuth::pending( $code ) : null;
 		?>
 		<div class="nzwp-card">
@@ -228,6 +275,31 @@ final class Admin {
 		</style>
 		<?php
 		echo '</div>';
+	}
+
+	public static function handle_authorize(): void {
+		if ( ! current_user_can( CAPABILITY ) || ! check_admin_referer( self::AUTHZ_NONCE ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'niranzwp' ), '', [ 'response' => 403 ] );
+		}
+
+		$request_id = sanitize_text_field( wp_unslash( (string) ( $_POST['request_id'] ?? '' ) ) );
+		$allow      = isset( $_POST['allow'] );
+
+		$back = OAuth::settle_authorization( $request_id, get_current_user_id(), $allow );
+
+		if ( null === $back ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '-connect&failed=1' ) );
+			exit;
+		}
+
+		/*
+		 * Deliberately not wp_safe_redirect(): the destination belongs to the
+		 * client, not to this site, which is the whole point of the grant. It
+		 * is safe because it is not taken from this request - it is the address
+		 * the client registered, checked again when the request was made.
+		 */
+		wp_redirect( $back ); // phpcs:ignore WordPress.Security.SafeRedirect.wp_redirect_wp_redirect
+		exit;
 	}
 
 	public static function handle_approve(): void {
