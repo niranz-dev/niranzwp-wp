@@ -400,7 +400,8 @@ final class Upload {
 			return new \WP_Error( 'niranzwp_exists', 'That file appeared while the upload was in flight, and overwrite was not set.', [ 'status' => 409 ] );
 		}
 
-		$checkpoint = Checkpoint::before_file( $rel, 'create-upload-link' );
+		$cp         = Checkpoint::before_file_result( $rel, 'create-upload-link' );
+		$checkpoint = $cp['id'];
 
 		// Record the previous contents before the swap. If this request is the
 		// last one the site survives, the guard puts them back on the next load.
@@ -423,6 +424,9 @@ final class Upload {
 				'sha256'        => $digest,
 				'replaced'      => $existed,
 				'checkpoint_id' => $checkpoint,
+				// Said outright rather than left to be inferred from a null id.
+				'checkpoint'    => null !== $checkpoint,
+				'checkpoint_error' => $cp['error'],
 				'guarded'       => Recovery::installed(),
 				'status'        => 'written',
 			],

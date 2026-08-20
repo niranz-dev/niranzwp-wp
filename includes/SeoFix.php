@@ -271,6 +271,8 @@ final class SeoFix {
 
 		$changes = [];
 		$written = 0;
+		$targets = [];
+		$pending = [];
 
 		foreach ( $items as $item ) {
 			$id    = (int) ( $item['id'] ?? 0 );
@@ -306,18 +308,48 @@ final class SeoFix {
 			if ( $dry_run ) {
 				$row['status'] = 'would_update';
 			} else {
-				update_post_meta( $id, $key, $value );
-				$row['status'] = 'updated';
-				++$written;
+				$targets[] = [ $id, $key ];
+				$pending[] = [ 'id' => $id, 'key' => $key, 'value' => $value, 'row' => count( $changes ) ];
+				$row['status'] = 'pending';
 			}
 
 			$changes[] = $row;
+		}
+
+		/*
+		 * One snapshot for the batch, taken after everything has been resolved
+		 * and before anything is written. Only the key being changed is
+		 * captured: these calls change one field across hundreds of posts, and
+		 * a whole-post snapshot each would pass the checkpoint ceiling long
+		 * before the batch did.
+		 */
+		$checkpoint = null;
+		$cp_error   = null;
+		if ( ! $dry_run && $targets ) {
+			$cp = Checkpoint::capture(
+				[ 'meta' => $targets ],
+				sprintf( 'Before seo-set-meta: %d posts', count( $targets ) )
+			);
+			if ( is_wp_error( $cp ) ) {
+				$cp_error = $cp->get_error_message();
+			} else {
+				$checkpoint = (int) $cp['checkpoint_id'];
+			}
+
+			foreach ( $pending as $w ) {
+				update_post_meta( $w['id'], $w['key'], $w['value'] );
+				$changes[ $w['row'] ]['status'] = 'updated';
+				++$written;
+			}
 		}
 
 		return [
 			'dry_run' => $dry_run,
 			'total'   => count( $items ),
 			'written' => $written,
+			'checkpoint_id' => $checkpoint,
+			'checkpoint'    => null !== $checkpoint,
+			'checkpoint_error' => $cp_error,
 			'changes' => $changes,
 			'note'    => $dry_run ? 'Nothing was written. Pass dry_run false to apply.' : null,
 		];
@@ -344,6 +376,9 @@ final class SeoFix {
 		$changes = [];
 		$written = 0;
 
+		$targets = [];
+		$pending = [];
+
 		foreach ( $items as $item ) {
 			$id  = (int) ( $item['id'] ?? 0 );
 			$alt = trim( (string) ( $item['alt'] ?? '' ) );
@@ -368,18 +403,42 @@ final class SeoFix {
 			if ( $dry_run ) {
 				$row['status'] = 'would_update';
 			} else {
-				update_post_meta( $id, '_wp_attachment_image_alt', $alt );
-				$row['status'] = 'updated';
-				++$written;
+				$targets[] = [ $id, '_wp_attachment_image_alt' ];
+				$pending[] = [ 'id' => $id, 'value' => $alt, 'row' => count( $changes ) ];
+				$row['status'] = 'pending';
 			}
 
 			$changes[] = $row;
+		}
+
+		// One snapshot for the batch, before any of it is written.
+		$checkpoint = null;
+		$cp_error   = null;
+		if ( ! $dry_run && $targets ) {
+			$cp = Checkpoint::capture(
+				[ 'meta' => $targets ],
+				sprintf( 'Before media-set-alt: %d images', count( $targets ) )
+			);
+			if ( is_wp_error( $cp ) ) {
+				$cp_error = $cp->get_error_message();
+			} else {
+				$checkpoint = (int) $cp['checkpoint_id'];
+			}
+
+			foreach ( $pending as $w ) {
+				update_post_meta( $w['id'], '_wp_attachment_image_alt', $w['value'] );
+				$changes[ $w['row'] ]['status'] = 'updated';
+				++$written;
+			}
 		}
 
 		return [
 			'dry_run' => $dry_run,
 			'total'   => count( $items ),
 			'written' => $written,
+			'checkpoint_id'    => $checkpoint,
+			'checkpoint'       => null !== $checkpoint,
+			'checkpoint_error' => $cp_error,
 			'changes' => $changes,
 			'note'    => $dry_run ? 'Nothing was written. Pass dry_run false to apply.' : null,
 		];

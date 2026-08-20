@@ -566,9 +566,19 @@ final class Files {
 			return $out;
 		}
 
-		// Snapshot first. A checkpoint that could not be taken is reported, not
-		// fatal -- refusing the write because the undo failed would be worse.
-		$out['checkpoint_id'] = Checkpoint::before_file( ltrim( self::rel( $path ), '/' ), 'write-file' );
+		/*
+		 * Snapshot first. A checkpoint that could not be taken is reported, not
+		 * fatal -- refusing to repair a broken site because the undo failed
+		 * would be worse. But it has to be reported in a way somebody reads:
+		 * a null id is indistinguishable from a field nobody set, so the
+		 * reason travels with it.
+		 */
+		$cp                   = Checkpoint::before_file_result( ltrim( self::rel( $path ), '/' ), 'write-file' );
+		$out['checkpoint_id'] = $cp['id'];
+		if ( null !== $cp['error'] ) {
+			$out['checkpoint']       = false;
+			$out['checkpoint_error'] = $cp['error'];
+		}
 
 		// Record what is being replaced before replacing it. If this request is
 		// the last one the site manages, the guard puts it back on the next
@@ -669,7 +679,12 @@ final class Files {
 			return $out;
 		}
 
-		$out['checkpoint_id'] = Checkpoint::before_file( ltrim( $rel, '/' ), 'edit-file' );
+		$cp                   = Checkpoint::before_file_result( ltrim( $rel, '/' ), 'edit-file' );
+		$out['checkpoint_id'] = $cp['id'];
+		if ( null !== $cp['error'] ) {
+			$out['checkpoint']       = false;
+			$out['checkpoint_error'] = $cp['error'];
+		}
 
 		Recovery::arm( $path, $before );
 
@@ -936,13 +951,22 @@ final class Files {
 				'note'    => 'Nothing was deleted. Pass dry_run false to apply.',
 			];
 		}
-		$checkpoint = Checkpoint::before_file( $rel, 'delete-file' );
+		$cp         = Checkpoint::before_file_result( $rel, 'delete-file' );
+		$checkpoint = $cp['id'];
+		$cp_error   = $cp['error'];
 
 		if ( ! unlink( $path ) ) {
 			return new \WP_Error( 'niranzwp_delete_failed', 'Could not delete the file.' );
 		}
 
-		return [ 'path' => '/' . $rel, 'status' => 'deleted', 'dry_run' => false, 'checkpoint_id' => $checkpoint ];
+		$out = [ 'path' => '/' . $rel, 'status' => 'deleted', 'dry_run' => false, 'checkpoint_id' => $checkpoint ];
+		if ( null !== $cp_error ) {
+			// Deleting without an undo is worth saying out loud, not leaving
+			// to be inferred from a null.
+			$out['checkpoint']       = false;
+			$out['checkpoint_error'] = $cp_error;
+		}
+		return $out;
 	}
 
 	/**

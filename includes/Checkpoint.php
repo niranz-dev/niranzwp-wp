@@ -67,11 +67,30 @@ final class Checkpoint {
 		$posts   = array_values( array_unique( array_map( 'intval', (array) ( $targets['posts'] ?? [] ) ) ) );
 		$options = array_values( array_unique( array_map( 'strval', (array) ( $targets['options'] ?? [] ) ) ) );
 
-		if ( ! $files && ! $posts && ! $options ) {
-			return new \WP_Error( 'niranzwp_empty_checkpoint', 'Nothing to capture. Pass files, posts or options.' );
+		/*
+		 * Single meta fields, as [post_id, meta_key] pairs.
+		 *
+		 * Snapshotting whole posts is the wrong shape for the bulk SEO writes:
+		 * they change one key on hundreds of posts, and capturing every field
+		 * and every meta row for each would pass the four-megabyte ceiling
+		 * long before the batch did. One key each is what restoring actually
+		 * needs.
+		 */
+		$meta = [];
+		foreach ( (array) ( $targets['meta'] ?? [] ) as $pair ) {
+			$id  = (int) ( $pair[0] ?? $pair['id'] ?? 0 );
+			$key = (string) ( $pair[1] ?? $pair['key'] ?? '' );
+			if ( $id && '' !== $key ) {
+				$meta[ $id . '|' . $key ] = [ $id, $key ];
+			}
+		}
+		$meta = array_values( $meta );
+
+		if ( ! $files && ! $posts && ! $options && ! $meta ) {
+			return new \WP_Error( 'niranzwp_empty_checkpoint', 'Nothing to capture. Pass files, posts, options or meta.' );
 		}
 
-		$snapshot = [ 'files' => [], 'posts' => [], 'options' => [] ];
+		$snapshot = [ 'files' => [], 'posts' => [], 'meta' => [], 'options' => [] ];
 		$total    = 0;
 
 		foreach ( $files as $rel ) {
@@ -124,6 +143,18 @@ final class Checkpoint {
 			];
 		}
 
+		foreach ( $meta as [ $id, $key ] ) {
+			// Absent and empty are different: restoring the first means deleting
+			// the row, restoring the second means writing an empty string.
+			$existed = metadata_exists( 'post', $id, $key );
+			$snapshot['meta'][] = [
+				'id'      => $id,
+				'key'     => $key,
+				'value'   => $existed ? get_post_meta( $id, $key, true ) : null,
+				'existed' => $existed,
+			];
+		}
+
 		foreach ( $options as $name ) {
 			$snapshot['options'][] = [ 'name' => $name, 'value' => get_option( $name, null ), 'existed' => null !== get_option( $name, null ) ];
 		}
@@ -159,6 +190,7 @@ final class Checkpoint {
 			'created'       => get_post_field( 'post_date_gmt', $id ),
 			'files'         => count( $snapshot['files'] ),
 			'posts'         => count( $snapshot['posts'] ),
+			'meta'          => count( $snapshot['meta'] ?? [] ),
 			'options'       => count( $snapshot['options'] ),
 			'bytes'         => strlen( $json ),
 		];
@@ -170,8 +202,26 @@ final class Checkpoint {
 	 * taken is reported, not fatal.
 	 */
 	public static function before_file( string $rel, string $why ): ?int {
+		return self::before_file_result( $rel, $why )['id'];
+	}
+
+	/**
+	 * The same snapshot, with the reason it failed when it did.
+	 *
+	 * Writing without an undo is the right call - refusing to repair a broken
+	 * site because the snapshot failed would be worse - but the caller has to
+	 * be able to say so. Returning only a null id made a missing checkpoint
+	 * indistinguishable from a field nobody set, which is how a safety net
+	 * goes missing without anyone noticing.
+	 *
+	 * @return array{id:?int,error:?string}
+	 */
+	public static function before_file_result( string $rel, string $why ): array {
 		$r = self::capture( [ 'files' => [ $rel ] ], sprintf( 'Before %s: %s', $why, $rel ) );
-		return is_wp_error( $r ) ? null : (int) $r['checkpoint_id'];
+		if ( is_wp_error( $r ) ) {
+			return [ 'id' => null, 'error' => $r->get_error_message() ];
+		}
+		return [ 'id' => (int) $r['checkpoint_id'], 'error' => null ];
 	}
 
 	/** Snapshot a post just before this plugin rewrites its content or meta. */
@@ -278,6 +328,44 @@ final class Checkpoint {
 			foreach ( (array) ( $p['meta'] ?? [] ) as $key => $values ) {
 				foreach ( (array) $values as $value ) {
 					add_post_meta( $pid, $key, wp_slash( maybe_unserialize( $value ) ) );
+				}
+			}
+		}
+
+		foreach ( (array) ( $snapshot['meta'] ?? [] ) as $m ) {
+			$pid = (int) ( $m['id'] ?? 0 );
+			$key = (string) ( $m['key'] ?? '' );
+			if ( ! $pid || '' === $key ) {
+				continue;
+			}
+			if ( ! get_post( $pid ) ) {
+				$actions[] = [ 'kind' => 'meta', 'id' => $pid, 'key' => $key, 'action' => 'gone', 'note' => 'The post no longer exists.' ];
+				continue;
+			}
+
+			$existed = ! empty( $m['existed'] );
+			$now     = metadata_exists( 'post', $pid, $key ) ? get_post_meta( $pid, $key, true ) : null;
+			$want    = $existed ? ( $m['value'] ?? '' ) : null;
+
+			if ( $now === $want ) {
+				$actions[] = [ 'kind' => 'meta', 'id' => $pid, 'key' => $key, 'action' => 'unchanged' ];
+				continue;
+			}
+
+			// Absent and empty are not the same thing, so putting an empty
+			// string back where there was no row would leave the post
+			// different from how it was found.
+			$actions[] = [
+				'kind'   => 'meta',
+				'id'     => $pid,
+				'key'    => $key,
+				'action' => $dry ? ( $existed ? 'would_restore' : 'would_delete' ) : ( $existed ? 'restored' : 'deleted' ),
+			];
+			if ( ! $dry ) {
+				if ( $existed ) {
+					update_post_meta( $pid, $key, $want );
+				} else {
+					delete_post_meta( $pid, $key );
 				}
 			}
 		}
@@ -461,6 +549,21 @@ final class Checkpoint {
 			'meta'                => $rw,
 		] );
 
+		register_ability( 'niranzwp/checkpoint-verify', [
+			'label'               => __( 'Verify checkpoint', 'niranzwp' ),
+			'description'         => __( 'Opens a checkpoint and reports whether it could actually be restored: that every file it claims is present, that the stored bytes decode to the size and hash recorded, that PHP still parses, and where the current file differs. A backup that cannot be checked is a hope rather than a backup - run this before relying on one, not after.', 'niranzwp' ),
+			'category'            => 'niranzwp-checkpoints',
+			'input_schema'        => [
+				'type'       => 'object',
+				'properties' => [ 'checkpoint_id' => [ 'type' => 'integer' ] ],
+				'required'   => [ 'checkpoint_id' ],
+			],
+			'output_schema'       => [ 'type' => 'object' ],
+			'permission_callback' => $gate,
+			'execute_callback'    => [ self::class, 'ability_verify' ],
+			'meta'                => $ro,
+		] );
+
 		register_ability( 'niranzwp/checkpoint-delete', [
 			'label'               => __( 'Delete checkpoint', 'niranzwp' ),
 			'description'         => __( 'Permanently removes a saved checkpoint.', 'niranzwp' ),
@@ -475,6 +578,107 @@ final class Checkpoint {
 			'execute_callback'    => [ self::class, 'ability_delete' ],
 			'meta'                => $rm,
 		] );
+	}
+
+	/**
+	 * Say whether a checkpoint could actually put things back.
+	 *
+	 * Reading a checkpoint by hand means decoding JSON, knowing the content
+	 * sits base64 under a `b64` flag, and comparing hashes - which is three
+	 * chances to get it wrong and conclude a good backup is broken, or worse,
+	 * that a broken one is fine. This answers it directly and changes nothing.
+	 *
+	 * @return array<string,mixed>|\WP_Error
+	 */
+	public static function ability_verify( mixed $input = [] ) {
+		$input = is_array( $input ) ? $input : [];
+		$id    = (int) ( $input['checkpoint_id'] ?? 0 );
+
+		$post = get_post( $id );
+		if ( ! $post || self::POST_TYPE !== $post->post_type ) {
+			return new \WP_Error( 'niranzwp_no_checkpoint', sprintf( 'No checkpoint with id %d.', $id ), [ 'status' => 404 ] );
+		}
+
+		$payload = json_decode( (string) $post->post_content, true );
+		if ( ! is_array( $payload ) ) {
+			return [
+				'checkpoint_id' => $id,
+				'restorable'    => false,
+				'why'           => 'The stored record is not readable JSON.',
+			];
+		}
+
+		$files    = [];
+		$problems = [];
+
+		foreach ( (array) ( $payload['files'] ?? [] ) as $f ) {
+			$rel      = (string) ( $f['path'] ?? '' );
+			$existed  = ! empty( $f['existed'] );
+			$stored   = (string) ( $f['content'] ?? '' );
+			$decoded  = ! empty( $f['b64'] ) ? base64_decode( $stored, true ) : $stored;
+
+			$row = [ 'path' => $rel, 'existed_when_taken' => $existed ];
+
+			if ( ! $existed ) {
+				// Recording an absence is legitimate: restoring means deleting.
+				$row['restores_to'] = 'absent';
+				$files[]            = $row;
+				continue;
+			}
+
+			if ( false === $decoded ) {
+				$row['ok']  = false;
+				$row['why'] = 'The stored content is not valid base64.';
+				$problems[] = $rel;
+				$files[]    = $row;
+				continue;
+			}
+
+			$row['bytes']  = strlen( (string) $decoded );
+			$row['sha256'] = hash( 'sha256', (string) $decoded );
+
+			if ( str_ends_with( strtolower( $rel ), '.php' ) ) {
+				try {
+					token_get_all( (string) $decoded, TOKEN_PARSE );
+					$row['parses'] = true;
+				} catch ( \ParseError $e ) {
+					$row['parses'] = false;
+					$row['why']    = 'The stored PHP does not parse: ' . $e->getMessage();
+					$problems[]    = $rel;
+				}
+			}
+
+			// What restoring would actually change, right now.
+			$abs = ABSPATH . ltrim( $rel, '/' );
+			if ( ! file_exists( $abs ) ) {
+				$row['current'] = 'absent';
+				$row['differs'] = true;
+			} else {
+				$now            = hash_file( 'sha256', $abs );
+				$row['current'] = [ 'bytes' => (int) filesize( $abs ), 'sha256' => $now ];
+				$row['differs'] = $now !== $row['sha256'];
+			}
+
+			$row['ok'] = ! isset( $row['why'] );
+			$files[]   = $row;
+		}
+
+		$posts   = count( (array) ( $payload['posts'] ?? [] ) );
+		$options = count( (array) ( $payload['options'] ?? [] ) );
+
+		return [
+			'checkpoint_id' => $id,
+			'label'         => $post->post_title,
+			'created'       => $post->post_date,
+			'restorable'    => empty( $problems ),
+			'problems'      => $problems,
+			'files'         => $files,
+			'posts'         => $posts,
+			'options'       => $options,
+			'note'          => empty( $problems )
+				? 'Every stored file decodes and parses. checkpoint-restore would put these back.'
+				: 'Some stored files could not be read back; restoring would not fully succeed.',
+		];
 	}
 
 	/** @return array<string,mixed>|\WP_Error */
