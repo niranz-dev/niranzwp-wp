@@ -4,7 +4,7 @@
 
 **An MCP server for WordPress that an agent can be trusted with.**
 
-Fifty-one purpose-built abilities instead of a shell and a hope.
+Sixty-five purpose-built abilities instead of a shell and a hope.
 Every write previews before it runs, is snapshotted first, and puts itself back if it takes the site down.
 
 [![Release](https://img.shields.io/github/v/release/niranz-dev/niranzwp-wp?label=release&color=7c3aed)](https://github.com/niranz-dev/niranzwp-wp/releases)
@@ -76,12 +76,13 @@ thing reached for, and its own description tells the agent so.
 ## What it can do
 
 <table>
-<tr><td width="150"><b>SEO</b></td><td>Audit titles and descriptions · find what is missing · rank what to fix first · write meta · schema audit · <code>llms.txt</code> · internal link suggestions · GEO checks</td></tr>
-<tr><td><b>Content</b></td><td>List, audit and refresh posts · set image alt text · find thin and stale pages · content priorities</td></tr>
-<tr><td><b>Blocks &amp; design</b></td><td>Read and write blocks without corrupting them · inspect registered block types · read and write <code>theme.json</code> design tokens · Elementor read and update</td></tr>
+<tr><td width="150"><b>SEO</b></td><td>Audit titles and descriptions · find what is missing · rank what to fix first · write meta · schema audit · <code>llms.txt</code> · internal link suggestions · redirects · GEO checks</td></tr>
+<tr><td><b>Content</b></td><td>List, audit and refresh posts · set image alt text · find thin and stale pages</td></tr>
+<tr><td><b>Elementor</b></td><td>The live widget catalogue · write, move and edit layouts · page settings · the site kit, global colours and fonts · headers, footers, popups and the conditions that place them</td></tr>
+<tr><td><b>Gutenberg</b></td><td>Read the block tree · find, update and move one block by its path · write without corrupting the markup · inspect registered block types</td></tr>
 <tr><td><b>Files</b></td><td>Read (paged) · list (recursive, globbed) · write · edit · delete · disable or re-enable a file without deleting it</td></tr>
 <tr><td><b>Database</b></td><td>Size and bloat report · transient and revision cleanup · autoloaded options report</td></tr>
-<tr><td><b>Operations</b></td><td>Site info · plugin list · cache purge · WP-CLI · checkpoints · uploads of any size</td></tr>
+<tr><td><b>Operations</b></td><td>Site info · plugin list · cache purge · WP-CLI · snapshots · uploads of any size</td></tr>
 <tr><td><b>Skills</b></td><td>Store reusable instructions on the site itself, so every client that connects reads the same brief</td></tr>
 </table>
 
@@ -89,6 +90,15 @@ thing reached for, and its own description tells the agent so.
 niranzwp discover                      # everything this site exposes
 niranzwp run niranzwp/seo-audit        # and run any of it
 ```
+
+## Documentation
+
+| | |
+| --- | --- |
+| [Connecting a client](docs/connecting.md) | The CLI, an MCP client, a browser connector |
+| [Designing pages](docs/designing.md) | Elementor and Gutenberg, end to end |
+| [Ability reference](docs/abilities.md) | All 65, by group |
+| [When a write goes wrong](docs/safety.md) | Snapshots, self-recovery, the switches that are off |
 
 ## Moving files
 
