@@ -54,6 +54,17 @@ final class License {
 	}
 
 	/**
+	 * Not the inverse of is_pro(): an expired licence is neither. It has a
+	 * word worth showing - the site paid once and should be told the paying
+	 * lapsed - whereas free and revoked have nothing to say and are the two
+	 * states a screen may leave unlabelled.
+	 */
+	public static function is_free(): bool {
+		$state = self::state();
+		return self::FREE === $state || self::REVOKED === $state;
+	}
+
+	/**
 	 * The word on the badge, and the class that colours it.
 	 *
 	 * @return array{label:string,class:string,title:string}

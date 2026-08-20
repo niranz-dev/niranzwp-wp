@@ -69,12 +69,75 @@ final class Admin {
 			-webkit-mask:url(<?php echo self::MENU_MARK; // phpcs:ignore WordPress.Security.EscapeOutput ?>) no-repeat center/20px 20px;
 			mask:url(<?php echo self::MENU_MARK; // phpcs:ignore WordPress.Security.EscapeOutput ?>) no-repeat center/20px 20px;
 		}
+		/* Colour is taken from the row rather than set: the sidebar has eight
+		   core colour schemes plus whatever a site has added, and currentColor
+		   is correct in all of them without naming one. Opacity carries the
+		   difference between a resting row and the current one, so the chip
+		   brightens with the label it belongs to instead of against it.
+
+		   line-height sets the height - the row is 34px and a chip with its own
+		   height would fight it. vertical-align nudges it back onto the cap
+		   height of the label, which sits a pixel low next to a 10px chip. */
+		#toplevel_page_<?php echo esc_attr( self::SLUG ); ?> .wp-menu-name .nzwp-menu-lic{
+			display:inline-block;position:relative;vertical-align:1px;margin-left:7px;
+			padding:0 7px;border-radius:999px;
+			border:1px solid currentColor;
+			font-size:10px;font-weight:600;letter-spacing:.04em;line-height:16px;
+			opacity:.72;
+		}
+		/* Same sheen as the masthead chip, in the row's own colour rather than
+		   white, so it stays right in every admin scheme. See Admin::styles()
+		   for why the registered property doubles as the feature test.
+
+		   The ring here is a real border, so the highlight is drawn just outside
+		   it with a negative inset instead of masking a padding box - one less
+		   layer in markup that core also styles. */
+		@property --nzwp-sweep{syntax:'<angle>';inherits:false;initial-value:0deg}
+		#toplevel_page_<?php echo esc_attr( self::SLUG ); ?> .nzwp-menu-lic::before{
+			content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;
+			pointer-events:none;
+			background:conic-gradient(from var(--nzwp-sweep),
+				transparent 0deg 170deg,
+				currentColor 300deg,
+				transparent 360deg);
+			filter:drop-shadow(0 0 3px currentColor);
+			-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+			-webkit-mask-composite:xor;
+			mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+			mask-composite:exclude;
+			animation:nzwp-sweep 4.5s linear infinite;
+		}
+		@keyframes nzwp-sweep{to{--nzwp-sweep:360deg}}
+		@media(prefers-reduced-motion:reduce){
+			#toplevel_page_<?php echo esc_attr( self::SLUG ); ?> .nzwp-menu-lic::before{display:none}
+		}
+		#toplevel_page_<?php echo esc_attr( self::SLUG ); ?>:hover .nzwp-menu-lic,
+		#toplevel_page_<?php echo esc_attr( self::SLUG ); ?>.current .nzwp-menu-lic,
+		#toplevel_page_<?php echo esc_attr( self::SLUG ); ?>.wp-has-current-submenu .nzwp-menu-lic{
+			opacity:1;
+		}
 		</style>
 		<?php
 	}
 
 	public static function menu(): void {
-		add_menu_page( 'NiranzWP', 'NiranzWP', CAPABILITY, self::SLUG, [ self::class, 'render_configuration' ], 'dashicons-rest-api', 76 );
+		/*
+		 * The edition rides in the menu title, which is where a reader looks
+		 * to find out what is installed. Free shows nothing at all: an empty
+		 * state does not need a label, and a sidebar row is the last place to
+		 * spend a reader's attention on one.
+		 *
+		 * Core runs this through wptexturize() and prints it unescaped, which
+		 * is how the update-count bubbles work too - so the span is safe here,
+		 * but every part of it must stay literal. Nothing user-supplied goes
+		 * into this string.
+		 */
+		$nzwp_lic   = License::badge();
+		$menu_title = License::is_free()
+			? 'NiranzWP'
+			: 'NiranzWP<span class="nzwp-menu-lic">' . esc_html( $nzwp_lic['label'] ) . '</span>';
+
+		add_menu_page( 'NiranzWP', $menu_title, CAPABILITY, self::SLUG, [ self::class, 'render_configuration' ], 'dashicons-rest-api', 76 );
 		self::no_frames( add_submenu_page( self::SLUG, __( 'Configuration', 'niranzwp' ), __( 'Configuration', 'niranzwp' ), CAPABILITY, self::SLUG, [ self::class, 'render_configuration' ] ) );
 		self::no_frames( add_submenu_page( self::SLUG, __( 'Connections', 'niranzwp' ), __( 'Connections', 'niranzwp' ), CAPABILITY, self::SLUG . '-connections', [ Connections::class, 'render' ] ) );
 		self::no_frames( add_submenu_page( self::SLUG, __( 'Abilities Hub', 'niranzwp' ), __( 'Abilities Hub', 'niranzwp' ), CAPABILITY, self::SLUG . '-abilities', [ Hub::class, 'render' ] ) );
@@ -567,11 +630,21 @@ final class Admin {
    pill off the measure. */
 .nzwp-by{
 	min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-	color:rgba(255,255,255,.68);font-size:12px;line-height:1;text-decoration:none;
+	color:#fff;font-size:12px;line-height:1;text-decoration:none;
 	border-left:1px solid rgba(255,255,255,.24);padding-left:12px;margin-left:2px;
-	transition:color .12s ease;
+	transition:none;
 }
-.nzwp-by:hover,.nzwp-by:focus{color:#fff}
+/* Resting at full white puts the two links - this and the GitHub mark - a
+   step above "Open source" beside them, which is a label and goes nowhere.
+   That difference is now doing the work the dimming used to: bright means
+   clickable, .68 means it is only telling you something.
+
+   Hover therefore has to be an underline rather than a colour, because the
+   colour is already spent. Offset so the rule clears the descender in the
+   j, and in the bar's own dimmed white so it states the link without
+   drawing a second hard line next to the divider. */
+.nzwp-by:hover{text-decoration:underline;text-decoration-color:rgba(255,255,255,.55);text-underline-offset:3px}
+.nzwp-by:focus-visible{outline:2px solid #fff;outline-offset:3px;border-radius:3px}
 /* Same divider treatment as the attribution, so the three items read as one
    run of small print rather than three separate claims. */
 .nzwp-free{
@@ -582,14 +655,25 @@ final class Admin {
    title rather than relying on the icon to say what it is. */
 .nzwp-gh{
 	flex:none;width:17px;height:17px;
-	background-color:rgba(255,255,255,.72);
+	background-color:#fff;
 	-webkit-mask-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/%3E%3C/svg%3E");mask-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12'/%3E%3C/svg%3E");
 	-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
 	-webkit-mask-position:center;mask-position:center;
 	-webkit-mask-size:contain;mask-size:contain;
-	transition:background-color .12s ease;
+	transition:filter .14s ease;
 }
-.nzwp-gh:hover,.nzwp-gh:focus{background-color:#fff}
+/* The mark rests at full white, so hover cannot be a colour change - there
+   is nowhere brighter to go, and the mark should not change size - a 17px
+   icon that grows on approach reads as a button, which it is not. A short
+   glow answers instead: the mark stays exactly where and what it is, and
+   only the light around it moves.
+
+   Keyboard focus then needs its own cue, because it can no longer borrow the
+   hover colour. A ring rather than a scale: focus has to be unmistakable at a
+   glance, which a 9% size change is not. */
+.nzwp-gh:hover{filter:drop-shadow(0 0 5px rgba(255,255,255,.75))}
+.nzwp-gh:focus-visible{outline:2px solid #fff;outline-offset:3px;border-radius:3px}
+@media(prefers-reduced-motion:reduce){.nzwp-gh{transition:none}}
 @supports not ((-webkit-mask-image:none) or (mask-image:none)){.nzwp-gh{display:none}}
 /* The bar has a fixed height and the wordmark and state pill are the two
    things that must survive any width, so the small print goes first. */
@@ -610,36 +694,101 @@ final class Admin {
 	background-image:linear-gradient(180deg,#0f815a,#0c6a49);
 	color:#fff;box-shadow:inset 0 1px 0 rgba(255,255,255,.20);
 }
-/* The edition chip. Gold is the one colour on this bar that reads as paid
-   without saying so, but gold is light, so the text has to go dark rather
-   than white - #3d2a00 on the top stop is 9.4:1, which is the reverse of how
-   the green chip is built and the reason it cannot simply copy it. Slightly
-   tracked out and a shade heavier, because it is one short word and needs the
-   weight to sit level with the longer chip beside it. */
+/* The edition chip, set beside the wordmark rather than out at the far right
+   with the state pill. An edition is part of what the thing is called - the
+   product is "NiranzWP Pro" - not a condition that changes while you watch,
+   and the right-hand group is for conditions. Reading it in the name is also
+   how every plugin that has an edition does it.
+
+   Outlined rather than filled, because a filled chip here would be the third
+   coloured object in a 900px bar and would compete with the green state pill
+   for the same glance. Outline says the same word at a lower volume.
+
+   Both border and text are white at low alpha rather than a fixed grey, so
+   the chip travels with the gradient instead of drifting against it: at the
+   lightest stop the outline holds 6.1:1 and the word 8.0:1, so neither
+   depends on where the ramp happens to land behind it. Vertical padding
+   rather than a set height, so the pill centres on the wordmark's cap
+   height at any font size. */
 .nzwp-lic{
-	border-radius:999px;padding:3px 11px;
-	font-size:12px;font-weight:600;letter-spacing:.03em;
-	white-space:nowrap;flex:none;
+	flex:none;white-space:nowrap;
+	border-radius:999px;padding:2px 9px;
+	/* The row's gap is 12px, which is right between the three pieces of
+	   small print but leaves the chip sitting equidistant from the wordmark
+	   and the divider after it - reading as owned by neither. 8px attaches
+	   it to the name, which is the whole point of moving it here. */
+	margin-left:-4px;
+	font-size:11px;font-weight:600;letter-spacing:.04em;line-height:1.45;
+	color:rgba(255,255,255,.86);
+	box-shadow:inset 0 0 0 1px rgba(255,255,255,.52);
 }
+/* Pro is the only state that gets the full-strength outline. Free and lapsed
+   step back: this chip should pull the eye only when there is something to be
+   pleased about. Lapsed keeps the amber it had, which is the one place on
+   this bar where a colour has to carry a warning on its own. */
 .nzwp-lic-pro{
-	background-color:#e8b23a;
-	background-image:linear-gradient(180deg,#f5c451,#dfa62b);
-	color:#3d2a00;
-	box-shadow:inset 0 1px 0 rgba(255,255,255,.45), 0 1px 2px rgba(0,0,0,.18);
+	position:relative;
+	color:#fff;
+	/* .50, not the .72 the other two states use. The sweep below can only go
+	   to solid white, so a ring that already sits near white leaves the
+	   highlight nowhere to travel from - it animated correctly and was
+	   invisible. The dim half of the sweep is what the eye reads as the
+	   resting ring now, and the bright half is the effect. */
+	box-shadow:inset 0 0 0 1px rgba(255,255,255,.50);
 }
-/* Free and lapsed both step back rather than compete: this chip should only
-   pull the eye when there is something to be pleased about. */
+/* The travelling highlight on the Pro ring.
+   ------------------------------------------------------------------------
+   A registered custom property is the only way to animate an angle: an
+   unregistered --x is a string to the engine, and a string cannot be
+   interpolated, so the gradient would jump 0deg -> 360deg with nothing in
+   between. Registering it as <angle> makes it a real animatable value.
+
+   That registration is also the feature test. Where @property is missing the
+   var() has no computed value, the conic-gradient is invalid, and the
+   ::before simply paints nothing - leaving the plain ring underneath, which
+   is a finished design on its own rather than a broken one. No @supports
+   needed; the failure mode is already the fallback.
+
+   The ring itself is the pseudo-element's 1px padding, revealed by masking
+   its own content-box out of its border-box. Two layers, composited to
+   exclude: what is left is the frame.
+
+   4.5s and one narrow highlight per turn. The chip sits in admin furniture
+   that a person looks past all day, so this has to read as a sheen catching
+   the light when the eye happens to land on it - not as something asking to
+   be watched. */
+@property --nzwp-sweep{syntax:'<angle>';inherits:false;initial-value:0deg}
+.nzwp-lic-pro::before{
+	content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;
+	pointer-events:none;
+	background:conic-gradient(from var(--nzwp-sweep),
+		rgba(255,255,255,0) 0deg 170deg,
+		rgba(255,255,255,.55) 250deg,
+		#fff 300deg,
+		rgba(255,255,255,.55) 340deg,
+		rgba(255,255,255,0) 360deg);
+	/* The ring is 1px, which is under the size at which a change in white
+	   alone registers. The shadow only has the bright arc to fall from - the
+	   rest of the pseudo-element is transparent and casts nothing - so this
+	   glows the highlight and nothing else. */
+	filter:drop-shadow(0 0 3px rgba(255,255,255,.85));
+	-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+	-webkit-mask-composite:xor;
+	mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+	mask-composite:exclude;
+	animation:nzwp-sweep 4.5s linear infinite;
+}
+@keyframes nzwp-sweep{to{--nzwp-sweep:360deg}}
+/* Motion is the whole effect, so there is nothing to slow down - it stops,
+   and the plain ring it was drawn over is what remains. */
+@media(prefers-reduced-motion:reduce){.nzwp-lic-pro::before{display:none}}
 .nzwp-lic-free{
-	background-color:rgba(255,255,255,.14);
-	background-image:none;
-	color:rgba(255,255,255,.92);
-	box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);
+	color:rgba(255,255,255,.72);
+	box-shadow:inset 0 0 0 1px rgba(255,255,255,.34);
 }
 .nzwp-lic-lapsed{
-	background-color:rgba(245,196,81,.16);
-	background-image:none;
 	color:#f7d489;
-	box-shadow:inset 0 0 0 1px rgba(245,196,81,.42);
+	box-shadow:inset 0 0 0 1px rgba(245,196,81,.52);
 }
 
 .nzwp-bar .nzwp-off{
@@ -1140,6 +1289,11 @@ final class Admin {
 			<div class="nzwp-bar-in">
 				<span class="nzwp-bar-name">
 					<span class="nzwp-mark">NIRANZWP</span>
+					<?php $nzwp_lic = License::badge(); ?>
+					<span class="nzwp-lic <?php echo esc_attr( $nzwp_lic['class'] ); ?>"
+						title="<?php echo esc_attr( $nzwp_lic['title'] ); ?>">
+						<?php echo esc_html( $nzwp_lic['label'] ); ?>
+					</span>
 					<a class="nzwp-by" href="https://niranz.dev" target="_blank" rel="noopener noreferrer">
 						<?php esc_html_e( 'Developed by Niranjan', 'niranzwp' ); ?>
 					</a>
@@ -1151,11 +1305,6 @@ final class Admin {
 				<span class="nzwp-bar-meta">
 					<span class="nzwp-badge <?php echo Settings::active() ? 'nzwp-on' : 'nzwp-off'; ?>">
 						<?php echo Settings::active() ? esc_html__( 'AI abilities on', 'niranzwp' ) : esc_html__( 'AI abilities off', 'niranzwp' ); ?>
-					</span>
-					<?php $nzwp_lic = License::badge(); ?>
-					<span class="nzwp-lic <?php echo esc_attr( $nzwp_lic['class'] ); ?>"
-						title="<?php echo esc_attr( $nzwp_lic['title'] ); ?>">
-						<?php echo esc_html( $nzwp_lic['label'] ); ?>
 					</span>
 					<span class="nzwp-ver"><?php echo esc_html( VERSION ); ?></span>
 				</span>
