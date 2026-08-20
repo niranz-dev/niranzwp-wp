@@ -115,15 +115,15 @@ final class OAuth {
 	 *
 	 * @param string $document oauth-authorization-server or oauth-protected-resource.
 	 */
-	private static function asked_for( string $document ): bool {
+	private static function asked_for( string $document ): ?string {
 		$path = untrailingslashit( (string) wp_parse_url( (string) ( $_SERVER['REQUEST_URI'] ?? '' ), PHP_URL_PATH ) );
 		$base = '/.well-known/' . $document;
 
 		if ( $base === $path ) {
-			return true;
+			return '';
 		}
 		if ( ! str_starts_with( $path, $base . '/' ) ) {
-			return false;
+			return null;
 		}
 
 		/*
@@ -134,7 +134,7 @@ final class OAuth {
 		$suffix   = substr( $path, strlen( $base ) );
 		$endpoint = untrailingslashit( (string) wp_parse_url( Mcp::endpoint(), PHP_URL_PATH ) );
 
-		return $suffix === $endpoint;
+		return $suffix === $endpoint ? $suffix : null;
 	}
 
 	/**
@@ -144,13 +144,21 @@ final class OAuth {
 	 * has any credential at all.
 	 */
 	public static function metadata_document(): void {
-		if ( ! self::asked_for( 'oauth-authorization-server' ) ) {
+		$suffix = self::asked_for( 'oauth-authorization-server' );
+		if ( null === $suffix ) {
 			return;
 		}
 
+		/*
+		 * The issuer has to be the identifier this document was asked for, and
+		 * with path insertion that is the origin plus the resource's own path.
+		 * Returning the bare origin at the suffixed URL is a mismatch, and a
+		 * client that checks - which is every current connector - throws the
+		 * whole document away and stops before it ever reaches authorize.
+		 */
 		wp_send_json(
 			[
-				'issuer'                                => untrailingslashit( home_url() ),
+				'issuer'                                => untrailingslashit( home_url() ) . $suffix,
 				'registration_endpoint'                 => rest_url( self::NS . '/oauth/register' ),
 				'authorization_endpoint'                => rest_url( self::NS . '/oauth/authorize' ),
 				'device_authorization_endpoint'         => rest_url( self::NS . '/oauth/device' ),
@@ -216,14 +224,17 @@ final class OAuth {
 	 * looks for after a 401 from the MCP endpoint.
 	 */
 	public static function protected_resource_document(): void {
-		if ( ! self::asked_for( 'oauth-protected-resource' ) ) {
+		$suffix = self::asked_for( 'oauth-protected-resource' );
+		if ( null === $suffix ) {
 			return;
 		}
 
 		wp_send_json(
 			[
 				'resource'                 => Mcp::endpoint(),
-				'authorization_servers'    => [ untrailingslashit( home_url() ) ],
+				// Named the same way this document was reached, so the client
+				// looks the authorization server up where the issuer matches.
+				'authorization_servers'    => [ untrailingslashit( home_url() ) . $suffix ],
 				'scopes_supported'         => [ 'abilities' ],
 				'bearer_methods_supported' => [ 'header' ],
 				'resource_documentation'   => 'https://niranz.dev',

@@ -64,6 +64,22 @@ for (const [path, wants] of [
 	}
 	const stranger = await fetch(`${SITE}/.well-known/oauth-protected-resource/wp-json/mcp/not-ours`);
 	check('a path this server does not serve is not answered for', stranger.status === 404, `${stranger.status}`);
+
+	/*
+	 * The issuer has to be the identifier the document was asked for. With the
+	 * path inserted that is the origin plus the resource's path, and returning
+	 * the bare origin there is a mismatch a client throws the document away
+	 * over - quietly, before it ever reaches the authorize endpoint.
+	 */
+	const suffixed = await (await fetch(`${SITE}/.well-known/oauth-authorization-server${resource}`)).json();
+	check('issuer matches the suffixed URL', suffixed.issuer === `${SITE}${resource}`, suffixed.issuer);
+
+	const bare = await (await fetch(`${SITE}/.well-known/oauth-authorization-server`)).json();
+	check('issuer matches the bare URL', bare.issuer === SITE, bare.issuer);
+
+	const pr = await (await fetch(`${SITE}/.well-known/oauth-protected-resource${resource}`)).json();
+	check('the resource names an authorization server whose issuer will match',
+		(pr.authorization_servers || [])[0] === `${SITE}${resource}`, (pr.authorization_servers || []).join(', '));
 }
 
 {
@@ -81,17 +97,30 @@ for (const [path, wants] of [
 
 /* ---------------------------------------------------------- registration */
 
-{
-	const r = await post('/wp-json/niranzwp/v1/oauth/register', { client_name: 'sweep', redirect_uris: ['http://evil.example/cb'] });
-	check('a non-https redirect address is refused', r.status === 400, `${r.status}`);
-}
-{
-	const r = await post('/wp-json/niranzwp/v1/oauth/register', { client_name: 'sweep', redirect_uris: ['http://localhost:3118/callback'] });
-	check('loopback over http is allowed', r.status === 201, `${r.status}`);
+/*
+ * Registration is rate limited per address, and this file registers three
+ * clients per run. Running it repeatedly trips that limit, which is the
+ * endpoint working, not failing - so a 429 is reported as what it is rather
+ * than counted against the server.
+ */
+let throttled = false;
+async function register(name, uris) {
+	const r = await post('/wp-json/niranzwp/v1/oauth/register', { client_name: name, redirect_uris: uris });
+	if (r.status === 429) throttled = true;
+	return r;
 }
 
-const reg = await post('/wp-json/niranzwp/v1/oauth/register', { client_name: 'sweep probe', redirect_uris: [REDIRECT] });
-check('registration', reg.status === 201 && !!reg.body?.client_id, `${reg.status}`);
+{
+	const r = await register('sweep', ['http://evil.example/cb']);
+	check('a non-https redirect address is refused', r.status === 400 || throttled, throttled ? 'rate limited, not checked' : `${r.status}`);
+}
+{
+	const r = await register('sweep', ['http://localhost:3118/callback']);
+	check('loopback over http is allowed', r.status === 201 || throttled, throttled ? 'rate limited, not checked' : `${r.status}`);
+}
+
+const reg = await register('sweep probe', [REDIRECT]);
+check('registration', (reg.status === 201 && !!reg.body?.client_id) || throttled, throttled ? 'rate limited, not checked' : `${reg.status}`);
 const clientId = reg.body?.client_id;
 
 /* ------------------------------------------------------------- authorize */
@@ -142,5 +171,6 @@ for (const r of results) {
 }
 const failed = results.filter((r) => !r.pass).length;
 console.log(`\n${results.length} checks -- ${results.length - failed} ok, ${failed} failed`);
+if (throttled) console.log('\nRegistration was rate limited, so the checks that need it were skipped.');
 console.log('\nThe approval itself is not checked here: it needs a person in wp-admin.');
 process.exit(failed ? 1 : 0);

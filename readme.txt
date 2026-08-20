@@ -4,7 +4,7 @@ Tags: cli, rest-api, abilities, seo, automation
 Requires at least: 6.9
 Tested up to: 7.0.4
 Requires PHP: 8.0
-Stable tag: 5.3.15
+Stable tag: 5.3.16
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -104,6 +104,16 @@ or capturable, and wp-admin and wp-includes cannot be written to.
 3. Check NiranzWP > Troubleshoot if anything looks wrong.
 
 == Changelog ==
+
+= 5.3.16 =
+* Fixed: a connector registered itself and then stopped, without ever opening
+  the browser. The discovery document was being served at the URL a connector
+  asks for, but it named the bare site as its issuer. Under RFC 8414 the issuer
+  has to be the identifier the document was asked for, which with the path
+  inserted is the site plus the resource's own path - and a client that checks
+  throws the whole document away. The issuer now matches whichever URL was
+  used, and the protected resource names the authorization server the same way,
+  so the two agree.
 
 = 5.3.15 =
 * Fixed: a connector could not sign in. Both OAuth RFCs build the discovery URL
