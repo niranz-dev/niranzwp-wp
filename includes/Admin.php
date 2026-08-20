@@ -79,37 +79,11 @@ final class Admin {
 		   height would fight it. vertical-align nudges it back onto the cap
 		   height of the label, which sits a pixel low next to a 10px chip. */
 		#toplevel_page_<?php echo esc_attr( self::SLUG ); ?> .wp-menu-name .nzwp-menu-lic{
-			display:inline-block;position:relative;vertical-align:1px;margin-left:7px;
+			display:inline-block;vertical-align:1px;margin-left:7px;
 			padding:0 7px;border-radius:999px;
 			border:1px solid currentColor;
 			font-size:10px;font-weight:600;letter-spacing:.04em;line-height:16px;
 			opacity:.72;
-		}
-		/* Same sheen as the masthead chip, in the row's own colour rather than
-		   white, so it stays right in every admin scheme. See Admin::styles()
-		   for why the registered property doubles as the feature test.
-
-		   The ring here is a real border, so the highlight is drawn just outside
-		   it with a negative inset instead of masking a padding box - one less
-		   layer in markup that core also styles. */
-		@property --nzwp-sweep{syntax:'<angle>';inherits:false;initial-value:0deg}
-		#toplevel_page_<?php echo esc_attr( self::SLUG ); ?> .nzwp-menu-lic::before{
-			content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1px;
-			pointer-events:none;
-			background:conic-gradient(from var(--nzwp-sweep),
-				transparent 0deg 170deg,
-				currentColor 300deg,
-				transparent 360deg);
-			filter:drop-shadow(0 0 3px currentColor);
-			-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-			-webkit-mask-composite:xor;
-			mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
-			mask-composite:exclude;
-			animation:nzwp-sweep 4.5s linear infinite;
-		}
-		@keyframes nzwp-sweep{to{--nzwp-sweep:360deg}}
-		@media(prefers-reduced-motion:reduce){
-			#toplevel_page_<?php echo esc_attr( self::SLUG ); ?> .nzwp-menu-lic::before{display:none}
 		}
 		#toplevel_page_<?php echo esc_attr( self::SLUG ); ?>:hover .nzwp-menu-lic,
 		#toplevel_page_<?php echo esc_attr( self::SLUG ); ?>.current .nzwp-menu-lic,
