@@ -117,7 +117,7 @@ final class Admin {
 		self::no_frames( add_submenu_page( self::SLUG, __( 'Abilities Hub', 'niranzwp' ), __( 'Abilities Hub', 'niranzwp' ), CAPABILITY, self::SLUG . '-abilities', [ Hub::class, 'render' ] ) );
 		self::no_frames( add_submenu_page( self::SLUG, __( 'Context', 'niranzwp' ), __( 'Context', 'niranzwp' ), CAPABILITY, self::SLUG . '-context', [ ContextAdmin::class, 'render' ] ) );
 		self::no_frames( add_submenu_page( self::SLUG, __( 'Skills', 'niranzwp' ), __( 'Skills', 'niranzwp' ), CAPABILITY, self::SLUG . '-skills', [ SkillsAdmin::class, 'render' ] ) );
-		self::no_frames( add_submenu_page( self::SLUG, __( 'Checkpoints', 'niranzwp' ), __( 'Checkpoints', 'niranzwp' ), CAPABILITY, self::SLUG . '-checkpoints', [ CheckpointAdmin::class, 'render' ] ) );
+		self::no_frames( add_submenu_page( self::SLUG, __( 'Snapshots', 'niranzwp' ), __( 'Snapshots', 'niranzwp' ), CAPABILITY, self::SLUG . '-checkpoints', [ CheckpointAdmin::class, 'render' ] ) );
 		self::no_frames( add_submenu_page( self::SLUG, __( 'Troubleshoot', 'niranzwp' ), __( 'Troubleshoot', 'niranzwp' ), CAPABILITY, self::SLUG . '-troubleshoot', [ self::class, 'render_troubleshoot' ] ) );
 		// The device-code screen. Registered under a null parent so it has a URL
 		// to send someone to without adding a menu row nobody navigates to.
@@ -1345,7 +1345,7 @@ final class Admin {
 			[
 				'key'   => 'checkpoints',
 				'value' => (string) $points,
-				'label' => __( 'checkpoints kept', 'niranzwp' ),
+				'label' => __( 'snapshots kept', 'niranzwp' ),
 				'href'  => admin_url( 'admin.php?page=niranzwp-checkpoints' ),
 				'tone'  => '',
 			],
@@ -1390,7 +1390,7 @@ final class Admin {
 				return __( 'The standing brief every connected client reads before it does anything.', 'niranzwp' );
 			case __( 'Skills', 'niranzwp' ):
 				return __( 'Instructions for a particular job, loaded when that job comes up.', 'niranzwp' );
-			case __( 'Checkpoints', 'niranzwp' ):
+			case __( 'Snapshots', 'niranzwp' ):
 				return __( 'What was here before the last few changes, and how to put it back.', 'niranzwp' );
 			case __( 'Connections', 'niranzwp' ):
 				return __( 'What is currently connected to this site, and how to disconnect it.', 'niranzwp' );

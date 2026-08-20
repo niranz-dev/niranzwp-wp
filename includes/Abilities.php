@@ -41,7 +41,7 @@ final class Abilities {
 			'niranzwp-design'      => [ __( 'Design', 'niranzwp' ), __( 'The palette and rules this site works to, and a check against them.', 'niranzwp' ) ],
 			'niranzwp-performance' => [ __( 'Performance', 'niranzwp' ), __( 'Database weight, what pages load, and image size.', 'niranzwp' ) ],
 			'niranzwp-skills'      => [ __( 'Context and skills', 'niranzwp' ), __( 'The standing brief for this site and the per-job instructions.', 'niranzwp' ) ],
-			'niranzwp-checkpoints' => [ __( 'Checkpoints', 'niranzwp' ), __( 'Snapshots taken before destructive writes, and restoring them.', 'niranzwp' ) ],
+			'niranzwp-checkpoints' => [ __( 'Snapshots', 'niranzwp' ), __( 'Snapshots taken before destructive writes, and restoring them.', 'niranzwp' ) ],
 			'niranzwp-filesystem'  => [ __( 'Filesystem', 'niranzwp' ), __( 'Reading and writing files inside the WordPress install.', 'niranzwp' ) ],
 			'niranzwp-runtime'     => [ __( 'Code execution', 'niranzwp' ), __( 'PHP evaluation and WP-CLI. Full control of the site.', 'niranzwp' ) ],
 		];

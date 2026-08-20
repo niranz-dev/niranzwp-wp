@@ -57,7 +57,7 @@ final class CheckpointAdmin {
 	/* --------------------------------------------------------------- render */
 
 	public static function render(): void {
-		Admin::header( __( 'Checkpoints', 'niranzwp' ) );
+		Admin::header( __( 'Snapshots', 'niranzwp' ) );
 
 		if ( isset( $_GET['error'] ) ) {
 			echo '<div class="notice notice-error"><p>' . esc_html( (string) wp_unslash( $_GET['error'] ) ) . '</p></div>';
@@ -72,7 +72,7 @@ final class CheckpointAdmin {
 			);
 		}
 		if ( isset( $_GET['deleted'] ) ) {
-			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Checkpoint deleted.', 'niranzwp' ) . '</p></div>';
+			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Snapshot deleted.', 'niranzwp' ) . '</p></div>';
 		}
 
 		$rows = Checkpoint::all( 50 );
@@ -104,7 +104,7 @@ final class CheckpointAdmin {
 
 		<?php if ( ! $rows ) : ?>
 			<div class="nzwp-card" style="text-align:center;padding:32px">
-				<p style="margin:0 0 4px"><strong><?php esc_html_e( 'No checkpoints yet.', 'niranzwp' ); ?></strong></p>
+				<p style="margin:0 0 4px"><strong><?php esc_html_e( 'No snapshots yet.', 'niranzwp' ); ?></strong></p>
 				<p class="nzwp-desc" style="margin:0"><?php esc_html_e( 'One appears here the first time something writes a file or rewrites a post.', 'niranzwp' ); ?></p>
 			</div>
 			<?php
@@ -152,11 +152,11 @@ final class CheckpointAdmin {
 						<div class="right">
 							<a class="button button-small"
 							   href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=niranzwp_ckpt_restore&id=' . (int) $c['checkpoint_id'] ), self::NONCE ) ); ?>"
-							   onclick="return confirm('<?php echo esc_js( __( 'Put everything in this checkpoint back the way it was?', 'niranzwp' ) ); ?>')">
+							   onclick="return confirm('<?php echo esc_js( __( 'Put everything in this snapshot back the way it was?', 'niranzwp' ) ); ?>')">
 								<?php esc_html_e( 'Restore', 'niranzwp' ); ?>
 							</a>
 							<a href="<?php echo esc_url( wp_nonce_url( admin_url( 'admin-post.php?action=niranzwp_ckpt_delete&id=' . (int) $c['checkpoint_id'] ), self::NONCE ) ); ?>"
-							   onclick="return confirm('<?php echo esc_js( __( 'Delete this checkpoint? It cannot be restored afterwards.', 'niranzwp' ) ); ?>')"
+							   onclick="return confirm('<?php echo esc_js( __( 'Delete this snapshot? It cannot be restored afterwards.', 'niranzwp' ) ); ?>')"
 							   style="color:#b32d2e;font-size:12px;margin-left:8px"><?php esc_html_e( 'Delete', 'niranzwp' ); ?></a>
 						</div>
 					</div>

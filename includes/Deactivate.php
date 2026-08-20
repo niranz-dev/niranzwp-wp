@@ -83,7 +83,7 @@ final class Deactivate {
 				</div>
 				<div class="nzwp-bye-body">
 					<p><?php esc_html_e( 'Deactivating stops every connected tool and removes the recovery guard. Nothing of yours is touched.', 'niranzwp' ); ?></p>
-					<p><?php esc_html_e( 'If you go on to delete the plugin, what should happen to the work that is yours - the site brief, the design notes, your skills and every checkpoint?', 'niranzwp' ); ?></p>
+					<p><?php esc_html_e( 'If you go on to delete the plugin, what should happen to the work that is yours - the site brief, the design notes, your skills and every snapshot?', 'niranzwp' ); ?></p>
 
 					<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
 						<?php wp_nonce_field( self::ACTION ); ?>
