@@ -4,7 +4,7 @@ Tags: cli, rest-api, abilities, seo, automation
 Requires at least: 6.9
 Tested up to: 7.0.4
 Requires PHP: 8.0
-Stable tag: 5.3.14
+Stable tag: 5.3.15
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -104,6 +104,17 @@ or capturable, and wp-admin and wp-includes cannot be written to.
 3. Check NiranzWP > Troubleshoot if anything looks wrong.
 
 == Changelog ==
+
+= 5.3.15 =
+* Fixed: a connector could not sign in. Both OAuth RFCs build the discovery URL
+  by putting the well-known segment in front of the resource's own path, and
+  every current connector asks that way - for
+  /.well-known/oauth-protected-resource/wp-json/mcp/niranzwp rather than the
+  bare path. Only the bare path was answered, so every connector got a 404 where
+  it expected the document that tells it where to sign in. Both forms are
+  answered now, and a path this site does not serve still is not.
+* The WWW-Authenticate header on the MCP endpoint points at that same
+  path-inserted URL, which is the canonical one for this resource.
 
 = 5.3.14 =
 * Elementor: build a whole page, not one setting at a time. Write, move and edit

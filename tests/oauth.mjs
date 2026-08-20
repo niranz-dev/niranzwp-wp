@@ -49,6 +49,23 @@ for (const [path, wants] of [
 	check(`discovery ${path}`, r.ok && missing.length === 0, missing.length ? `missing ${missing.join(', ')}` : `${r.status}`);
 }
 
+/*
+ * Both RFCs build the discovery URL by putting the well-known segment in front
+ * of the resource's own path, and every current connector asks that way. The
+ * bare path alone answered 404 to all of them, which is a connector that cannot
+ * start - so both forms are checked, and a path that is not this server's is
+ * checked to still be refused.
+ */
+{
+	const resource = new URL(`${SITE}/wp-json/mcp/niranzwp`).pathname;
+	for (const doc of ['oauth-protected-resource', 'oauth-authorization-server']) {
+		const suffixed = await fetch(`${SITE}/.well-known/${doc}${resource}`);
+		check(`discovery ${doc} with the resource path appended`, suffixed.ok, `${suffixed.status}`);
+	}
+	const stranger = await fetch(`${SITE}/.well-known/oauth-protected-resource/wp-json/mcp/not-ours`);
+	check('a path this server does not serve is not answered for', stranger.status === 404, `${stranger.status}`);
+}
+
 {
 	const doc = await (await fetch(`${SITE}/.well-known/oauth-authorization-server`)).json();
 	const methods = doc.code_challenge_methods_supported || [];

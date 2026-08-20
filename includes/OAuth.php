@@ -103,14 +103,48 @@ final class OAuth {
 	/* ------------------------------------------------------------- metadata */
 
 	/**
+	 * Whether this request is for one of the discovery documents.
+	 *
+	 * Both RFCs build the URL by putting the well-known segment in front of
+	 * the resource's own path rather than at the root, so a client asks for
+	 * /.well-known/oauth-protected-resource/wp-json/mcp/niranzwp - and every
+	 * current connector does. Matching only the bare path answered 404 to all
+	 * of them, and a connector that cannot find the document cannot start.
+	 *
+	 * The bare form is still answered, because some clients ask for that.
+	 *
+	 * @param string $document oauth-authorization-server or oauth-protected-resource.
+	 */
+	private static function asked_for( string $document ): bool {
+		$path = untrailingslashit( (string) wp_parse_url( (string) ( $_SERVER['REQUEST_URI'] ?? '' ), PHP_URL_PATH ) );
+		$base = '/.well-known/' . $document;
+
+		if ( $base === $path ) {
+			return true;
+		}
+		if ( ! str_starts_with( $path, $base . '/' ) ) {
+			return false;
+		}
+
+		/*
+		 * A suffix names the resource it is asking about. Only this site's own
+		 * MCP endpoint is answered for; claiming to be the authorization server
+		 * for some other path would be answering a question nobody asked.
+		 */
+		$suffix   = substr( $path, strlen( $base ) );
+		$endpoint = untrailingslashit( (string) wp_parse_url( Mcp::endpoint(), PHP_URL_PATH ) );
+
+		return $suffix === $endpoint;
+	}
+
+	/**
 	 * RFC 8414 asks for this at the site root, which is outside the REST
 	 * namespace, so it is answered before WordPress decides what the request
 	 * was for. Public on purpose: a client has to be able to read it before it
 	 * has any credential at all.
 	 */
 	public static function metadata_document(): void {
-		$path = (string) wp_parse_url( (string) ( $_SERVER['REQUEST_URI'] ?? '' ), PHP_URL_PATH );
-		if ( '/.well-known/oauth-authorization-server' !== untrailingslashit( $path ) ) {
+		if ( ! self::asked_for( 'oauth-authorization-server' ) ) {
 			return;
 		}
 
@@ -154,12 +188,20 @@ final class OAuth {
 			return $response;
 		}
 
+		/*
+		 * Points at the path-inserted form, which is the canonical URL for
+		 * this resource's metadata under RFC 9728 - the bare one is answered
+		 * too, but a client should be sent to the document that names the
+		 * resource it just asked about.
+		 */
+		$resource = (string) wp_parse_url( Mcp::endpoint(), PHP_URL_PATH );
+
 		$response->header(
 			'WWW-Authenticate',
 			sprintf(
 				'Bearer realm="%s", resource_metadata="%s"',
 				esc_url_raw( home_url() ),
-				esc_url_raw( home_url( '/.well-known/oauth-protected-resource' ) )
+				esc_url_raw( home_url( '/.well-known/oauth-protected-resource' . $resource ) )
 			)
 		);
 
@@ -174,8 +216,7 @@ final class OAuth {
 	 * looks for after a 401 from the MCP endpoint.
 	 */
 	public static function protected_resource_document(): void {
-		$path = (string) wp_parse_url( (string) ( $_SERVER['REQUEST_URI'] ?? '' ), PHP_URL_PATH );
-		if ( '/.well-known/oauth-protected-resource' !== untrailingslashit( $path ) ) {
+		if ( ! self::asked_for( 'oauth-protected-resource' ) ) {
 			return;
 		}
 
