@@ -1101,10 +1101,15 @@ final class OAuth {
 			/*
 			 * https everywhere, with one exception: a client running on the
 			 * same machine as the browser, which cannot have a certificate.
-			 * That exception is loopback only - "localhost" as a name can be
-			 * pointed elsewhere by DNS or a hosts file.
+			 *
+			 * "localhost" is accepted alongside the IP literals. RFC 8252
+			 * prefers the literals, because a name can be pointed elsewhere by
+			 * DNS or a hosts file - but every client in practice registers
+			 * http://localhost:PORT/callback, and refusing it means refusing
+			 * them all. Anyone who can rewrite the hosts file on the machine
+			 * the browser is running on has already won.
 			 */
-			$loopback = in_array( strtolower( (string) $parts['host'] ), [ '127.0.0.1', '[::1]', '::1' ], true );
+			$loopback = in_array( strtolower( (string) $parts['host'] ), [ 'localhost', '127.0.0.1', '[::1]', '::1' ], true );
 			if ( 'https' !== strtolower( (string) $parts['scheme'] ) && ! ( 'http' === strtolower( (string) $parts['scheme'] ) && $loopback ) ) {
 				return new \WP_Error( 'bad_uri', sprintf( '"%s" must be https, or http on 127.0.0.1.', $uri ) );
 			}
