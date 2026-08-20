@@ -4,7 +4,7 @@ Tags: cli, rest-api, abilities, seo, automation
 Requires at least: 6.9
 Tested up to: 7.0.4
 Requires PHP: 8.0
-Stable tag: 5.3.18
+Stable tag: 5.3.19
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -104,6 +104,19 @@ or capturable, and wp-admin and wp-includes cannot be written to.
 3. Check NiranzWP > Troubleshoot if anything looks wrong.
 
 == Changelog ==
+
+= 5.3.19 =
+* Fixed: approving a connection asked you to log in when you were already
+  logged in. The authorize endpoint is a REST route, and a REST request does
+  not accept a cookie as proof of anything without a nonce, so someone sitting
+  in wp-admin in the next tab looked logged out. The cookie is read directly
+  now, and only to decide which page to send a browser to - the approval itself
+  is still a nonce-checked form in wp-admin.
+* The discovery documents are answered in both shapes a client may ask in: the
+  well-known segment in front of the resource's path, which is what RFC 8414
+  specifies, and after it, which is the OpenID shape. The second lands inside
+  /wp-json/, where REST answered 404 before this could, so the lookup now runs
+  first.
 
 = 5.3.18 =
 * Fixed: a cross-origin client could not read the session id. A client takes

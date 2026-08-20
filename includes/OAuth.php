@@ -88,8 +88,14 @@ final class OAuth {
 
 	public static function init(): void {
 		add_action( 'rest_api_init', [ self::class, 'routes' ] );
-		add_action( 'parse_request', [ self::class, 'metadata_document' ] );
-		add_action( 'parse_request', [ self::class, 'protected_resource_document' ] );
+		/*
+		 * Before REST claims the request. One of the two shapes a client may
+		 * ask in puts the well-known segment after the resource's own path,
+		 * which lands inside /wp-json/ - and rest_api_loaded() answers 404
+		 * there at the default priority, before either of these would run.
+		 */
+		add_action( 'parse_request', [ self::class, 'metadata_document' ], 5 );
+		add_action( 'parse_request', [ self::class, 'protected_resource_document' ], 5 );
 
 		/*
 		 * A 401 with no WWW-Authenticate is a dead end: the client is told no
@@ -122,19 +128,32 @@ final class OAuth {
 		if ( $base === $path ) {
 			return '';
 		}
-		if ( ! str_starts_with( $path, $base . '/' ) ) {
-			return null;
+
+		$endpoint = untrailingslashit( (string) wp_parse_url( Mcp::endpoint(), PHP_URL_PATH ) );
+
+		/*
+		 * Path insertion, which is what RFC 8414 specifies and what current
+		 * connectors ask for: the well-known segment in front of the
+		 * resource's own path. Only this site's own MCP endpoint is answered
+		 * for - claiming to be the authorization server for some other path
+		 * would be answering a question nobody asked.
+		 */
+		if ( str_starts_with( $path, $base . '/' ) ) {
+			$suffix = substr( $path, strlen( $base ) );
+			return $suffix === $endpoint ? $suffix : null;
 		}
 
 		/*
-		 * A suffix names the resource it is asking about. Only this site's own
-		 * MCP endpoint is answered for; claiming to be the authorization server
-		 * for some other path would be answering a question nobody asked.
+		 * Path appending, the OpenID Connect shape. Not what the OAuth RFC
+		 * says, but a client that takes an issuer with a path in it and glues
+		 * the well-known segment on the end asks this way, and answering
+		 * costs nothing.
 		 */
-		$suffix   = substr( $path, strlen( $base ) );
-		$endpoint = untrailingslashit( (string) wp_parse_url( Mcp::endpoint(), PHP_URL_PATH ) );
+		if ( $endpoint . $base === $path ) {
+			return $endpoint;
+		}
 
-		return $suffix === $endpoint ? $suffix : null;
+		return null;
 	}
 
 	/**
@@ -1237,6 +1256,24 @@ final class OAuth {
 		);
 
 		$screen = add_query_arg( 'authorize', $request_id, admin_url( 'admin.php?page=niranzwp-connect' ) );
+
+		/*
+		 * This is a REST route, and a REST request does not accept a cookie as
+		 * proof of anything without a nonce - so is_user_logged_in() is false
+		 * for someone sitting in wp-admin in the very next tab, and they were
+		 * being sent to log in again when they already had.
+		 *
+		 * The cookie is read here directly, and only to decide which page to
+		 * send a browser to. It authorises nothing: the approval itself is a
+		 * nonce-checked POST from wp-admin, so a forged link to this endpoint
+		 * still ends at a screen asking a person to say yes.
+		 */
+		if ( ! is_user_logged_in() ) {
+			$cookie_user = wp_validate_auth_cookie( '', 'logged_in' );
+			if ( $cookie_user ) {
+				wp_set_current_user( (int) $cookie_user );
+			}
+		}
 
 		// Not logged in, or logged in as someone who cannot manage the site:
 		// let WordPress ask, and come back here afterwards.
