@@ -66,6 +66,42 @@ final class Elementor {
 			'meta'                => $ro,
 		] );
 
+		register_ability( 'niranzwp/elementor-widgets', [
+			'label'               => __( 'List Elementor widgets', 'niranzwp' ),
+			'description'         => __( 'Lists the Elementor widget types registered on this site, so a layout is built only from widgets that actually exist here. Call this before writing any Elementor content, and elementor-widget for the settings a particular one accepts.', 'niranzwp' ),
+			'category'            => 'niranzwp-elementor',
+			'input_schema'        => [
+				'type'       => 'object',
+				'properties' => [
+					'search'   => [ 'type' => 'string', 'description' => 'Match against the widget name and title.' ],
+					'category' => [ 'type' => 'string', 'description' => 'Only widgets in this editor category, e.g. basic, general, theme-elements.' ],
+				],
+			],
+			'output_schema'       => [ 'type' => 'object' ],
+			'permission_callback' => $gate,
+			'execute_callback'    => [ self::class, 'widgets' ],
+			'meta'                => $ro,
+		] );
+
+		register_ability( 'niranzwp/elementor-widget', [
+			'label'               => __( 'Describe an Elementor widget', 'niranzwp' ),
+			'description'         => __( 'The settings one widget type accepts: each key, its control type, its default, and the values a select or choose control will take. Only the widget\'s own settings by default - the 274 layout, spacing, position and effect settings every widget shares are returned by asking for the widget named "common" instead, once, rather than repeated for each. Read this before setting anything on a widget; a guessed key is silently ignored and a guessed value can render an empty element.', 'niranzwp' ),
+			'category'            => 'niranzwp-elementor',
+			'input_schema'        => [
+				'type'       => 'object',
+				'properties' => [
+					'name'       => [ 'type' => 'string', 'description' => 'Widget type, e.g. heading. Use "common" for the shared settings.' ],
+					'responsive' => [ 'type' => 'boolean', 'default' => false, 'description' => 'Include the _tablet and _mobile variants. Off by default: they are the same control at another breakpoint.' ],
+					'search'     => [ 'type' => 'string', 'description' => 'Only settings whose key or label matches.' ],
+				],
+				'required'   => [ 'name' ],
+			],
+			'output_schema'       => [ 'type' => 'object' ],
+			'permission_callback' => $gate,
+			'execute_callback'    => [ self::class, 'widget' ],
+			'meta'                => $ro,
+		] );
+
 		register_ability( 'niranzwp/elementor-find', [
 			'label'               => __( 'Find Elementor elements', 'niranzwp' ),
 			'description'         => __( 'Finds elements on a page by widget type or by matching text in their settings, returning each element id so it can be edited precisely.', 'niranzwp' ),
@@ -424,4 +460,190 @@ final class Elementor {
 		$result['status'] = 'updated';
 		return $result;
 	}
+
+	/**
+	 * Elementor's own name for the settings every widget carries.
+	 *
+	 * Measured on this codebase: the `common` widget's 274 controls are the
+	 * same 274 that appear on the Advanced tab of heading, button, image,
+	 * text-editor, icon-box and image-carousel - identical keys, none missing,
+	 * none extra. So they are described once under that name rather than
+	 * repeated 254 times, which is the difference between a catalogue a client
+	 * can read and 6 MB of duplicated JSON.
+	 */
+	private const SHARED = 'common';
+
+	/** Widget types with no title are Elementor's internal bases, not widgets. */
+	private static function widget_manager(): ?object {
+		return self::available() && isset( \Elementor\Plugin::$instance->widgets_manager )
+			? \Elementor\Plugin::$instance->widgets_manager
+			: null;
+	}
+
+	/**
+	 * @param array<string,mixed> $input
+	 * @return array<string,mixed>|\WP_Error
+	 */
+	public static function widgets( array $input ) {
+		$wm = self::widget_manager();
+		if ( ! $wm ) {
+			return new \WP_Error( 'niranzwp_no_elementor', 'Elementor is not active on this site.' );
+		}
+
+		$search   = strtolower( trim( (string) ( $input['search'] ?? '' ) ) );
+		$category = strtolower( trim( (string) ( $input['category'] ?? '' ) ) );
+
+		$out        = [];
+		$categories = [];
+
+		foreach ( $wm->get_widget_types() as $name => $widget ) {
+			$title = (string) $widget->get_title();
+			if ( '' === $title ) {
+				continue;
+			}
+
+			$cats = array_map( 'strval', (array) $widget->get_categories() );
+			foreach ( $cats as $c ) {
+				$categories[ $c ] = ( $categories[ $c ] ?? 0 ) + 1;
+			}
+
+			if ( '' !== $category && ! in_array( $category, array_map( 'strtolower', $cats ), true ) ) {
+				continue;
+			}
+			if ( '' !== $search && ! str_contains( strtolower( $name . ' ' . $title ), $search ) ) {
+				continue;
+			}
+
+			$out[] = [
+				'name'       => (string) $name,
+				'title'      => $title,
+				'categories' => $cats,
+			];
+		}
+
+		usort( $out, static fn( array $a, array $b ): int => strcmp( $a['name'], $b['name'] ) );
+		ksort( $categories );
+
+		return [
+			'elementor'  => ELEMENTOR_VERSION,
+			'count'      => count( $out ),
+			'categories' => $categories,
+			'widgets'    => $out,
+			'shared'     => sprintf(
+				/* translators: %s: the widget name that carries the shared settings. */
+				__( 'Every widget also accepts the settings of "%s" - ask for that one to see them.', 'niranzwp' ),
+				self::SHARED
+			),
+		];
+	}
+
+	/**
+	 * @param array<string,mixed> $input
+	 * @return array<string,mixed>|\WP_Error
+	 */
+	public static function widget( array $input ) {
+		$wm = self::widget_manager();
+		if ( ! $wm ) {
+			return new \WP_Error( 'niranzwp_no_elementor', 'Elementor is not active on this site.' );
+		}
+
+		$name = trim( (string) ( $input['name'] ?? '' ) );
+		if ( '' === $name ) {
+			return new \WP_Error( 'niranzwp_bad_input', 'Pass the widget name, e.g. heading.' );
+		}
+
+		$widget = $wm->get_widget_types( $name );
+		if ( ! $widget ) {
+			return new \WP_Error(
+				'niranzwp_not_found',
+				sprintf( 'No widget type "%s" on this site. Call elementor-widgets to see what there is.', $name )
+			);
+		}
+
+		$shared     = self::SHARED === $name;
+		$responsive = ! empty( $input['responsive'] );
+		$search     = strtolower( trim( (string) ( $input['search'] ?? '' ) ) );
+
+		$settings = [];
+		$skipped  = [ 'responsive' => 0, 'shared' => 0 ];
+
+		foreach ( $widget->get_controls() as $key => $control ) {
+			$type = (string) ( $control['type'] ?? '' );
+
+			// A section is a heading in the editor panel, not a setting.
+			if ( 'section' === $type ) {
+				continue;
+			}
+
+			/*
+			 * The _tablet and _mobile keys are the same control at another
+			 * breakpoint. Listing them triples the reply and teaches a client
+			 * nothing it did not already know from the base key.
+			 */
+			if ( ! $responsive && preg_match( '/_(tablet|mobile|laptop|widescreen|mobile_extra|tablet_extra)$/', (string) $key ) ) {
+				++$skipped['responsive'];
+				continue;
+			}
+
+			if ( ! $shared && 'advanced' === (string) ( $control['tab'] ?? '' ) ) {
+				++$skipped['shared'];
+				continue;
+			}
+
+			$label = (string) ( $control['label'] ?? '' );
+			if ( '' !== $search && ! str_contains( strtolower( $key . ' ' . $label ), $search ) ) {
+				continue;
+			}
+
+			$entry = [ 'type' => $type ];
+			if ( '' !== $label ) {
+				$entry['label'] = $label;
+			}
+
+			if ( array_key_exists( 'default', $control ) ) {
+				$default = $control['default'];
+				// Scalars go as they are; a structured default is only useful
+				// if it is small enough to copy, so long ones say their shape.
+				if ( is_scalar( $default ) || null === $default ) {
+					$entry['default'] = $default;
+				} else {
+					$encoded = wp_json_encode( $default );
+					$entry['default'] = ( is_string( $encoded ) && strlen( $encoded ) <= 200 )
+						? json_decode( $encoded, true )
+						: gettype( $default );
+				}
+			}
+
+			if ( isset( $control['options'] ) && is_array( $control['options'] ) ) {
+				$entry['options'] = array_map( 'strval', array_keys( $control['options'] ) );
+			}
+
+			$settings[ (string) $key ] = $entry;
+		}
+
+		$result = [
+			'name'       => $name,
+			'title'      => (string) $widget->get_title(),
+			'categories' => array_map( 'strval', (array) $widget->get_categories() ),
+			'count'      => count( $settings ),
+			'settings'   => $settings,
+		];
+
+		if ( $skipped['shared'] > 0 ) {
+			$result['shared_settings'] = [
+				'count' => $skipped['shared'],
+				'where' => self::SHARED,
+				'note'  => __( 'Layout, spacing, position, background, border and motion settings, the same on every widget. Ask for the widget named here to see them.', 'niranzwp' ),
+			];
+		}
+		if ( $skipped['responsive'] > 0 ) {
+			$result['responsive_variants'] = [
+				'count' => $skipped['responsive'],
+				'note'  => __( 'Each is its base key plus _tablet or _mobile. Pass responsive true to list them.', 'niranzwp' ),
+			];
+		}
+
+		return $result;
+	}
+
 }
