@@ -61,6 +61,13 @@ const INPUTS = {
 	'niranzwp/elementor-read': { id: '@elementor', depth: 2 },
 	'niranzwp/elementor-find': { id: '@elementor', widget_type: 'heading' },
 	'niranzwp/elementor-update-setting': '@roundtrip',
+	'niranzwp/elementor-widgets': {},
+	'niranzwp/elementor-widget': { name: 'heading' },
+	// Both settings scopes are read. Writing either is left alone: the site
+	// scope is the whole site's colours and fonts, and a dry run that proves
+	// nothing is not worth the risk of a typo in this file.
+	'niranzwp/elementor-settings-read': { scope: 'site' },
+	'niranzwp/elementor-settings-write': null,
 
 	'niranzwp/read-file': { path: 'wp-config-sample.php' },
 	'niranzwp/list-directory': { path: 'wp-content/themes' },

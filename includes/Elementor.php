@@ -197,6 +197,45 @@ final class Elementor {
 			'execute_callback'    => [ self::class, 'update_setting' ],
 			'meta'                => [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => false, 'destructive' => true ] ],
 		] );
+
+		register_ability( 'niranzwp/elementor-settings-read', [
+			'label'               => __( 'Read Elementor settings', 'niranzwp' ),
+			'description'         => __( 'Reads the settings that live outside a page\'s element tree: with scope "site", the active kit - global colours, global fonts, layout defaults, the whole Site Settings panel; with scope "page", one page\'s own settings - its template, page background, page-level custom CSS. Reports what is set now and every key that can be set, so a write can name a real one.', 'niranzwp' ),
+			'category'            => 'niranzwp-elementor',
+			'input_schema'        => [
+				'type'       => 'object',
+				'properties' => [
+					'scope'  => [ 'type' => 'string', 'enum' => [ 'site', 'page' ], 'default' => 'site' ],
+					'id'     => [ 'type' => 'integer', 'description' => 'The page, for scope page. Ignored for scope site.' ],
+					'search' => [ 'type' => 'string', 'description' => 'Narrow the key list to those matching this.' ],
+					'keys_only' => [ 'type' => 'boolean', 'default' => false, 'description' => 'Report what is set now and nothing else.' ],
+				],
+			],
+			'output_schema'       => [ 'type' => 'object' ],
+			'permission_callback' => $gate,
+			'execute_callback'    => [ self::class, 'settings_read' ],
+			'meta'                => $ro,
+		] );
+
+		register_ability( 'niranzwp/elementor-settings-write', [
+			'label'               => __( 'Write Elementor settings', 'niranzwp' ),
+			'description'         => __( 'Changes the settings outside a page\'s element tree - the site kit with scope "site", one page\'s own settings with scope "page". Only the keys passed are changed; everything else is left as it is. A key the document does not have is refused rather than stored, because Elementor would drop it silently. Reports the before and after unless dry_run is false, snapshots first, and lets Elementor regenerate its CSS.', 'niranzwp' ),
+			'category'            => 'niranzwp-elementor',
+			'input_schema'        => [
+				'type'       => 'object',
+				'properties' => [
+					'scope'    => [ 'type' => 'string', 'enum' => [ 'site', 'page' ], 'default' => 'site' ],
+					'id'       => [ 'type' => 'integer', 'description' => 'The page, for scope page. Ignored for scope site.' ],
+					'settings' => [ 'type' => 'object', 'description' => 'The keys to change, as key => value. Call elementor-settings-read for the names.' ],
+					'dry_run'  => [ 'type' => 'boolean', 'default' => true ],
+				],
+				'required'   => [ 'settings' ],
+			],
+			'output_schema'       => [ 'type' => 'object' ],
+			'permission_callback' => $gate,
+			'execute_callback'    => [ self::class, 'settings_write' ],
+			'meta'                => [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => false, 'destructive' => true ] ],
+		] );
 	}
 
 	/** @return array<string,mixed>|\WP_Error */
@@ -545,6 +584,85 @@ final class Elementor {
 	 * exists to prevent.
 	 */
 	/**
+	 * The keys in a settings object that the element has no control for.
+	 *
+	 * Two kinds of key are legitimate without being controls. A responsive
+	 * variant is its base key plus a breakpoint suffix. And Elementor's own
+	 * reserved keys - __globals__, which binds a control to a global colour or
+	 * font, and __dynamic__, which binds one to a dynamic tag - hold a map of
+	 * control name to source rather than a value. Those are checked one level
+	 * in, so a typo inside them is still caught.
+	 *
+	 * @param array<string,mixed> $settings Settings as given.
+	 * @param string[]            $known    Control names the element has.
+	 * @return string[] Keys to report, in the order they were given.
+	 */
+	private static function unknown_keys( array $settings, array $known ): array {
+		$known   = array_flip( array_map( 'strval', $known ) );
+		$unknown = [];
+
+		foreach ( $settings as $key => $value ) {
+			$key = (string) $key;
+
+			if ( preg_match( '/^__.+__$/', $key ) ) {
+				if ( is_array( $value ) ) {
+					foreach ( array_keys( $value ) as $bound ) {
+						if ( ! isset( $known[ (string) $bound ] ) ) {
+							$unknown[] = $key . '.' . $bound;
+						}
+					}
+				}
+				continue;
+			}
+
+			$base = (string) preg_replace( '/_(tablet|mobile|laptop|widescreen|mobile_extra|tablet_extra)$/', '', $key );
+			if ( ! isset( $known[ $key ] ) && ! isset( $known[ $base ] ) ) {
+				$unknown[] = $key;
+			}
+		}
+
+		return $unknown;
+	}
+
+	/**
+	 * One control, as the catalogue reports it.
+	 *
+	 * @param array<string,mixed> $control     Elementor control definition.
+	 * @param int                 $max_default How long a structured default may
+	 *                                         be before it is reported by shape
+	 *                                         rather than by value.
+	 * @return array<string,mixed>
+	 */
+	private static function control_entry( array $control, int $max_default = 200 ): array {
+		$entry = [ 'type' => (string) ( $control['type'] ?? '' ) ];
+
+		$label = (string) ( $control['label'] ?? '' );
+		if ( '' !== $label ) {
+			$entry['label'] = $label;
+		}
+
+		if ( array_key_exists( 'default', $control ) ) {
+			$default = $control['default'];
+			// Scalars go as they are; a structured default is only useful
+			// if it is small enough to copy, so long ones say their shape.
+			if ( is_scalar( $default ) || null === $default ) {
+				$entry['default'] = $default;
+			} else {
+				$encoded = wp_json_encode( $default );
+				$entry['default'] = ( is_string( $encoded ) && strlen( $encoded ) <= $max_default )
+					? json_decode( $encoded, true )
+					: gettype( $default );
+			}
+		}
+
+		if ( isset( $control['options'] ) && is_array( $control['options'] ) ) {
+			$entry['options'] = array_map( 'strval', array_keys( $control['options'] ) );
+		}
+
+		return $entry;
+	}
+
+	/**
 	 * The control keys every element already has, as a lookup.
 	 *
 	 * These are read from the shared widget itself rather than inferred from
@@ -720,30 +838,7 @@ final class Elementor {
 				continue;
 			}
 
-			$entry = [ 'type' => $type ];
-			if ( '' !== $label ) {
-				$entry['label'] = $label;
-			}
-
-			if ( array_key_exists( 'default', $control ) ) {
-				$default = $control['default'];
-				// Scalars go as they are; a structured default is only useful
-				// if it is small enough to copy, so long ones say their shape.
-				if ( is_scalar( $default ) || null === $default ) {
-					$entry['default'] = $default;
-				} else {
-					$encoded = wp_json_encode( $default );
-					$entry['default'] = ( is_string( $encoded ) && strlen( $encoded ) <= 200 )
-						? json_decode( $encoded, true )
-						: gettype( $default );
-				}
-			}
-
-			if ( isset( $control['options'] ) && is_array( $control['options'] ) ) {
-				$entry['options'] = array_map( 'strval', array_keys( $control['options'] ) );
-			}
-
-			$settings[ (string) $key ] = $entry;
+			$settings[ (string) $key ] = self::control_entry( $control );
 		}
 
 		/*
@@ -850,11 +945,8 @@ final class Elementor {
 			if ( $wm && $settings ) {
 				$widget = $wm->get_widget_types( $widget_type );
 				$known  = $widget ? array_keys( $widget->get_controls() ) : [];
-				foreach ( array_keys( $settings ) as $key ) {
-					$base = preg_replace( '/_(tablet|mobile|laptop|widescreen|mobile_extra|tablet_extra)$/', '', (string) $key );
-					if ( ! in_array( (string) $key, $known, true ) && ! in_array( (string) $base, $known, true ) ) {
-						$report['unknown_settings'][] = $widget_type . '.' . $key;
-					}
+				foreach ( self::unknown_keys( $settings, $known ) as $key ) {
+					$report['unknown_settings'][] = $widget_type . '.' . $key;
 				}
 			}
 			$out['settings'] = (object) $settings;
@@ -863,11 +955,8 @@ final class Elementor {
 			$element  = self::element_type( $type );
 			if ( $element && $settings ) {
 				$known = array_keys( $element->get_controls() );
-				foreach ( array_keys( $settings ) as $key ) {
-					$base = preg_replace( '/_(tablet|mobile|laptop|widescreen|mobile_extra|tablet_extra)$/', '', (string) $key );
-					if ( ! in_array( (string) $key, $known, true ) && ! in_array( (string) $base, $known, true ) ) {
-						$report['unknown_settings'][] = $type . '.' . $key;
-					}
+				foreach ( self::unknown_keys( $settings, $known ) as $key ) {
+					$report['unknown_settings'][] = $type . '.' . $key;
 				}
 			}
 			$out['settings'] = (object) $settings;
@@ -1300,6 +1389,250 @@ final class Elementor {
 		clean_post_cache( $id );
 
 		$result['status'] = 'moved';
+		return $result;
+	}
+
+	/* ------------------------------------------ settings outside the tree */
+
+	/**
+	 * The document whose settings a scope means, and the post holding them.
+	 *
+	 * Elementor keeps two kinds of setting away from the element tree. A page
+	 * has its own - template, page background, page-level custom CSS - and the
+	 * site has a kit, which is the Site Settings panel: global colours, global
+	 * fonts, layout defaults. Both are documents, both store their settings in
+	 * the same meta key on their own post, and neither is reachable through
+	 * _elementor_data, which is why elementor-write cannot touch them.
+	 *
+	 * @param string $scope site or page.
+	 * @param int    $id    The page, for scope page.
+	 * @return array{doc:object,post_id:int,what:string}|\WP_Error
+	 */
+	private static function settings_target( string $scope, int $id ) {
+		if ( ! self::available() ) {
+			return new \WP_Error( 'niranzwp_no_elementor', 'Elementor is not active on this site.' );
+		}
+
+		if ( 'site' === $scope ) {
+			if ( ! isset( \Elementor\Plugin::$instance->kits_manager ) ) {
+				return new \WP_Error( 'niranzwp_no_kit', 'This Elementor build has no kits manager, so there are no site settings to read.' );
+			}
+			$kit = \Elementor\Plugin::$instance->kits_manager->get_active_kit();
+			if ( ! $kit || ! $kit->get_main_id() ) {
+				return new \WP_Error( 'niranzwp_no_kit', 'This site has no active Elementor kit.' );
+			}
+			return [ 'doc' => $kit, 'post_id' => (int) $kit->get_main_id(), 'what' => 'the active kit' ];
+		}
+
+		if ( $id <= 0 ) {
+			return new \WP_Error( 'niranzwp_missing', 'Scope "page" needs the id of the page.' );
+		}
+
+		// A revision carries the same meta, so a revision id looks valid here
+		// and writing to one changes history instead of the page.
+		$parent = wp_is_post_revision( $id );
+		if ( $parent ) {
+			return new \WP_Error(
+				'niranzwp_is_revision',
+				sprintf( 'Post %d is a revision of %d. Use %d.', $id, (int) $parent, (int) $parent )
+			);
+		}
+
+		if ( ! get_post( $id ) ) {
+			return new \WP_Error( 'niranzwp_not_found', 'No post with ID ' . $id );
+		}
+
+		$doc = \Elementor\Plugin::$instance->documents->get( $id );
+		if ( ! $doc ) {
+			return new \WP_Error(
+				'niranzwp_no_document',
+				sprintf( 'Elementor has no document for post %d, so it has no page settings. A post gets one the first time an Elementor layout is written to it.', $id )
+			);
+		}
+
+		return [ 'doc' => $doc, 'post_id' => $id, 'what' => sprintf( 'page %d', $id ) ];
+	}
+
+	/**
+	 * What a document currently has stored, straight from the meta.
+	 *
+	 * @param int $post_id Post holding the settings.
+	 * @return array<string,mixed>
+	 */
+	private static function stored_settings( int $post_id ): array {
+		$stored = get_post_meta( $post_id, '_elementor_page_settings', true );
+		return is_array( $stored ) ? $stored : [];
+	}
+
+	/** @return array<string,mixed>|\WP_Error */
+	public static function settings_read( mixed $input = [] ) {
+		$input = is_array( $input ) ? $input : [];
+		$scope = 'page' === (string) ( $input['scope'] ?? 'site' ) ? 'page' : 'site';
+
+		$target = self::settings_target( $scope, (int) ( $input['id'] ?? 0 ) );
+		if ( is_wp_error( $target ) ) {
+			return $target;
+		}
+
+		$current = self::stored_settings( $target['post_id'] );
+		$result  = [
+			'scope'   => $scope,
+			'post_id' => $target['post_id'],
+			'title'   => (string) get_the_title( $target['post_id'] ),
+			'current' => $current,
+		];
+
+		if ( 'site' === $scope ) {
+			$result['note'] = __( 'These are the site\'s Site Settings. A key absent from "current" is at Elementor\'s default, which "settings" reports.', 'niranzwp' );
+		} else {
+			$result['template'] = (string) get_post_meta( $target['post_id'], '_wp_page_template', true );
+		}
+
+		if ( ! empty( $input['keys_only'] ) ) {
+			return $result;
+		}
+
+		$search   = strtolower( trim( (string) ( $input['search'] ?? '' ) ) );
+		$settings = [];
+		$skipped  = 0;
+
+		foreach ( $target['doc']->get_controls() as $key => $control ) {
+			// A section is a heading in the editor panel, not a setting.
+			if ( 'section' === (string) ( $control['type'] ?? '' ) ) {
+				continue;
+			}
+			if ( preg_match( '/_(tablet|mobile|laptop|widescreen|mobile_extra|tablet_extra)$/', (string) $key ) ) {
+				++$skipped;
+				continue;
+			}
+			$label = (string) ( $control['label'] ?? '' );
+			if ( '' !== $search && ! str_contains( strtolower( $key . ' ' . $label ), $search ) ) {
+				continue;
+			}
+			$entry = self::control_entry( (array) $control, 1200 );
+			if ( isset( $control['fields'] ) && is_array( $control['fields'] ) ) {
+				$entry['fields'] = array_map( 'strval', array_keys( $control['fields'] ) );
+			}
+			$settings[ (string) $key ] = $entry;
+		}
+
+		$result['count']    = count( $settings );
+		$result['settings'] = $settings;
+
+		if ( $skipped > 0 ) {
+			$result['responsive_variants'] = [
+				'count' => $skipped,
+				'note'  => __( 'Each is its base key plus _tablet or _mobile, and can be written even though it is not listed.', 'niranzwp' ),
+			];
+		}
+
+		return $result;
+	}
+
+	/** @return array<string,mixed>|\WP_Error */
+	public static function settings_write( mixed $input = [] ) {
+		$input = is_array( $input ) ? $input : [];
+		$scope = 'page' === (string) ( $input['scope'] ?? 'site' ) ? 'page' : 'site';
+		$patch = $input['settings'] ?? null;
+		$dry   = ! isset( $input['dry_run'] ) || (bool) $input['dry_run'];
+
+		if ( ! is_array( $patch ) || ! $patch ) {
+			return new \WP_Error( 'niranzwp_missing', 'settings must be an object of key => value, and cannot be empty.' );
+		}
+
+		$target = self::settings_target( $scope, (int) ( $input['id'] ?? 0 ) );
+		if ( is_wp_error( $target ) ) {
+			return $target;
+		}
+
+		$controls = (array) $target['doc']->get_controls();
+
+		/*
+		 * A key the document does not have is refused, not stored. Elementor
+		 * ignores it on render, so it would look like a setting that quietly
+		 * does nothing - and unlike a widget setting, a wrong key here is
+		 * being written into the settings of the whole site.
+		 */
+		$unknown = [];
+		foreach ( array_keys( $patch ) as $key ) {
+			$base = preg_replace( '/_(tablet|mobile|laptop|widescreen|mobile_extra|tablet_extra)$/', '', (string) $key );
+			if ( ! isset( $controls[ $key ] ) && ! isset( $controls[ $base ] ) ) {
+				$unknown[] = (string) $key;
+			}
+		}
+		if ( $unknown ) {
+			return new \WP_Error(
+				'niranzwp_unknown_settings',
+				sprintf(
+					'%s has no setting called %s. Call elementor-settings-read for the names it does have.',
+					ucfirst( $target['what'] ),
+					implode( ', ', array_map( static fn( $k ) => '"' . $k . '"', $unknown ) )
+				)
+			);
+		}
+
+		/*
+		 * Elementor replaces the whole meta when it saves settings, so a patch
+		 * has to be merged onto what is there or every key not mentioned is
+		 * lost - which, for a kit, is the site's colours and fonts.
+		 */
+		$current = self::stored_settings( $target['post_id'] );
+		$merged  = array_merge( $current, $patch );
+
+		$changes = [];
+		foreach ( $patch as $key => $value ) {
+			$before = $current[ $key ] ?? null;
+			if ( $before === $value ) {
+				continue;
+			}
+			$changes[ (string) $key ] = [ 'before' => $before, 'after' => $value ];
+		}
+
+		$result = [
+			'scope'      => $scope,
+			'post_id'    => $target['post_id'],
+			'changes'    => $changes,
+			'unchanged'  => count( $patch ) - count( $changes ),
+			'keys_kept'  => count( array_diff_key( $current, $patch ) ),
+			'dry_run'    => $dry,
+		];
+
+		if ( ! $changes ) {
+			$result['status'] = 'no_change';
+			$result['note']   = 'Every key passed already holds that value.';
+			return $result;
+		}
+
+		if ( $dry ) {
+			$result['status'] = 'would_write';
+			$result['note']   = 'Nothing was written. Pass dry_run false to apply.';
+			return $result;
+		}
+
+		$result['checkpoint_id'] = Checkpoint::before_post( $target['post_id'], 'elementor-settings-write' );
+
+		/*
+		 * Saved through Elementor's own document rather than by writing the
+		 * meta, because saving a kit is more than one meta row: it runs the
+		 * kit's tabs, pushes site name and description back to WordPress, and
+		 * rebuilds the global CSS that every page on the site loads.
+		 */
+		$saved = $target['doc']->save( [ 'settings' => $merged ] );
+		if ( ! $saved ) {
+			return new \WP_Error(
+				'niranzwp_save_refused',
+				sprintf( 'Elementor refused to save %s. The usual cause is that the current user cannot edit that post.', $target['what'] )
+			);
+		}
+
+		if ( 'site' !== $scope && isset( \Elementor\Plugin::$instance->files_manager ) ) {
+			// A kit clears the whole site's CSS itself; a page does not.
+			\Elementor\Plugin::$instance->files_manager->clear_cache();
+		}
+		$result['css_cache_cleared'] = true;
+		clean_post_cache( $target['post_id'] );
+
+		$result['status'] = 'written';
 		return $result;
 	}
 
