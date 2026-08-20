@@ -37,6 +37,7 @@ require_once NIRANZWP_DIR . 'includes/License.php';
 require_once NIRANZWP_DIR . 'includes/Register.php';
 require_once NIRANZWP_DIR . 'includes/Abilities.php';
 require_once NIRANZWP_DIR . 'includes/Seo.php';
+require_once NIRANZWP_DIR . 'includes/Redirects.php';
 require_once NIRANZWP_DIR . 'includes/SeoFix.php';
 require_once NIRANZWP_DIR . 'includes/Content.php';
 require_once NIRANZWP_DIR . 'includes/Blocks.php';
