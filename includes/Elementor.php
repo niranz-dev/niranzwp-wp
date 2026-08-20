@@ -544,6 +544,34 @@ final class Elementor {
 	 * setting went through silently, which is the failure this whole catalogue
 	 * exists to prevent.
 	 */
+	/**
+	 * The control keys every element already has, as a lookup.
+	 *
+	 * These are read from the shared widget itself rather than inferred from
+	 * the control's tab. The tab is not a safe proxy: a container declares its
+	 * own Layout section - margin, padding, width, z-index - under the
+	 * Advanced tab, and treating the tab as "shared" hid those keys from the
+	 * catalogue even though writing them works.
+	 *
+	 * @return array<string,true>
+	 */
+	private static function shared_keys(): array {
+		static $keys = null;
+		if ( null !== $keys ) {
+			return $keys;
+		}
+
+		$keys   = [];
+		$common = self::widget_manager() ? self::widget_manager()->get_widget_types( self::SHARED ) : null;
+		if ( $common && method_exists( $common, 'get_controls' ) ) {
+			foreach ( array_keys( (array) $common->get_controls() ) as $key ) {
+				$keys[ $key ] = true;
+			}
+		}
+
+		return $keys;
+	}
+
 	private static function element_type( string $name ): ?object {
 		if ( ! self::available() ) {
 			return null;
@@ -672,7 +700,7 @@ final class Elementor {
 				continue;
 			}
 
-			if ( ! $shared && 'advanced' === (string) ( $control['tab'] ?? '' ) ) {
+			if ( ! $shared && isset( self::shared_keys()[ $key ] ) ) {
 				++$skipped['shared'];
 				continue;
 			}
@@ -1031,6 +1059,11 @@ final class Elementor {
 		// Slashed on the way in, or every quote in the layout is mangled.
 		update_post_meta( $id, '_elementor_data', wp_slash( $json ) );
 
+		$adopted = self::adopt( $id );
+		if ( $adopted ) {
+			$result['now_an_elementor_page'] = $adopted;
+		}
+
 		// The page renders from generated CSS, not from this meta.
 		if ( class_exists( '\Elementor\Plugin' ) ) {
 			\Elementor\Plugin::$instance->files_manager->clear_cache();
@@ -1040,6 +1073,42 @@ final class Elementor {
 
 		$result['status'] = 'written';
 		return $result;
+	}
+
+	/**
+	 * Make the post an Elementor page, if it is not one already.
+	 *
+	 * Writing _elementor_data is not enough. Elementor only renders the layout
+	 * for a post whose edit mode says it was built with the builder; without
+	 * that the layout is stored and the theme renders the (empty) post content
+	 * instead, which looks exactly like a write that silently did nothing.
+	 *
+	 * Only the missing keys are set, so a page already opened in the editor
+	 * keeps its own template type and the version that last saved it.
+	 *
+	 * @param int $id Post id.
+	 * @return array Meta keys that were added.
+	 */
+	private static function adopt( int $id ): array {
+		$added = [];
+
+		if ( '' === (string) get_post_meta( $id, '_elementor_edit_mode', true ) ) {
+			update_post_meta( $id, '_elementor_edit_mode', 'builder' );
+			$added[] = '_elementor_edit_mode';
+		}
+
+		if ( '' === (string) get_post_meta( $id, '_elementor_template_type', true ) ) {
+			$type = get_post_type( $id );
+			update_post_meta( $id, '_elementor_template_type', 'wp-' . ( $type ?: 'post' ) );
+			$added[] = '_elementor_template_type';
+		}
+
+		if ( '' === (string) get_post_meta( $id, '_elementor_version', true ) && defined( 'ELEMENTOR_VERSION' ) ) {
+			update_post_meta( $id, '_elementor_version', ELEMENTOR_VERSION );
+			$added[] = '_elementor_version';
+		}
+
+		return $added;
 	}
 
 
