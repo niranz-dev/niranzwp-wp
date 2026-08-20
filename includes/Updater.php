@@ -114,7 +114,21 @@ final class Updater {
 			return $transient;
 		}
 
-		$m = self::manifest();
+		/*
+		 * "Check Again" on the Updates screen refreshes what WordPress knows,
+		 * but it never reached this manifest: the cache below answered from
+		 * up to twelve hours ago, so a release published this morning stayed
+		 * invisible however many times the button was pressed. The button
+		 * loads update-core.php with force-check=1; honour it.
+		 *
+		 * Read-only, and only to decide whether to skip a cache, so there is
+		 * nothing here to protect with a nonce - core itself does not gate
+		 * this parameter either.
+		 */
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$forced = ! empty( $_GET['force-check'] ) && is_admin();
+
+		$m = self::manifest( $forced );
 		if ( ! $m || version_compare( (string) $m['version'], VERSION, '<=' ) ) {
 			return $transient;
 		}

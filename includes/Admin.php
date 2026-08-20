@@ -71,9 +71,15 @@ final class Admin {
 		}
 		/* Colour is taken from the row rather than set: the sidebar has eight
 		   core colour schemes plus whatever a site has added, and currentColor
-		   is correct in all of them without naming one. Opacity carries the
-		   difference between a resting row and the current one, so the chip
-		   brightens with the label it belongs to instead of against it.
+		   is correct in all of them without naming one - white would be wrong
+		   the moment someone picks the Light scheme, where this row is dark
+		   text on pale grey.
+
+		   No opacity of its own. It had .72, which dimmed the chip against a
+		   label that is already at full strength, and the chip read as grey
+		   beside its own name. currentColor alone means it is exactly as
+		   bright as the word it belongs to, in every state and every scheme,
+		   which is the whole reason to take the colour from the row.
 
 		   line-height sets the height - the row is 34px and a chip with its own
 		   height would fight it. vertical-align nudges it back onto the cap
@@ -83,12 +89,6 @@ final class Admin {
 			padding:0 7px;border-radius:999px;
 			border:1px solid currentColor;
 			font-size:10px;font-weight:600;letter-spacing:.04em;line-height:16px;
-			opacity:.72;
-		}
-		#toplevel_page_<?php echo esc_attr( self::SLUG ); ?>:hover .nzwp-menu-lic,
-		#toplevel_page_<?php echo esc_attr( self::SLUG ); ?>.current .nzwp-menu-lic,
-		#toplevel_page_<?php echo esc_attr( self::SLUG ); ?>.wp-has-current-submenu .nzwp-menu-lic{
-			opacity:1;
 		}
 		</style>
 		<?php
