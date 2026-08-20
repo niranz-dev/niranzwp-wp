@@ -66,6 +66,36 @@ final class Elementor {
 			'meta'                => $ro,
 		] );
 
+		register_ability( 'niranzwp/elementor-write', [
+			'label'               => __( 'Write Elementor layout', 'niranzwp' ),
+			'description'         => __( 'Adds, replaces or removes elements in a page\'s Elementor layout. Every element is checked against the widget types this site actually has before anything is written, ids are assigned for you, and the previous layout is snapshotted so the change can be put back. Reports what would change unless dry_run is false. Call elementor-widgets and elementor-widget first: a widget type that does not exist here, or a setting key that does not, renders as an empty element rather than an error.', 'niranzwp' ),
+			'category'            => 'niranzwp-elementor',
+			'input_schema'        => [
+				'type'       => 'object',
+				'properties' => [
+					'id'       => [ 'type' => 'integer', 'description' => 'The post or page to write to.' ],
+					'mode'     => [
+						'type'        => 'string',
+						'enum'        => [ 'append', 'prepend', 'after', 'before', 'replace-element', 'replace-page', 'delete' ],
+						'default'     => 'append',
+						'description' => 'append and prepend go at the top level. after, before, replace-element and delete act on target. replace-page discards the whole layout.',
+					],
+					'elements' => [
+						'type'        => 'array',
+						'description' => 'Element trees: each with elType (container or widget), widgetType for widgets, settings, and elements for children. Ids are assigned here - do not invent them.',
+						'items'       => [ 'type' => 'object' ],
+					],
+					'target'   => [ 'type' => 'string', 'description' => 'Existing element id, for after, before, replace-element and delete.' ],
+					'dry_run'  => [ 'type' => 'boolean', 'default' => true ],
+				],
+				'required'   => [ 'id' ],
+			],
+			'output_schema'       => [ 'type' => 'object' ],
+			'permission_callback' => $gate,
+			'execute_callback'    => [ self::class, 'write' ],
+			'meta'                => [ 'show_in_rest' => true, 'annotations' => [ 'readonly' => false, 'destructive' => true ] ],
+		] );
+
 		register_ability( 'niranzwp/elementor-widgets', [
 			'label'               => __( 'List Elementor widgets', 'niranzwp' ),
 			'description'         => __( 'Lists the Elementor widget types registered on this site, so a layout is built only from widgets that actually exist here. Call this before writing any Elementor content, and elementor-widget for the settings a particular one accepts.', 'niranzwp' ),
@@ -643,6 +673,295 @@ final class Elementor {
 			];
 		}
 
+		return $result;
+	}
+
+
+	/* ------------------------------------------------------------- writing */
+
+	/**
+	 * Every id already on the page, so a new one cannot collide with an old.
+	 *
+	 * @param array<int,array<string,mixed>> $nodes
+	 * @param array<string,bool>             $seen
+	 * @return array<string,bool>
+	 */
+	private static function ids( array $nodes, array $seen = [] ): array {
+		foreach ( $nodes as $n ) {
+			if ( is_array( $n ) && isset( $n['id'] ) ) {
+				$seen[ (string) $n['id'] ] = true;
+			}
+			if ( is_array( $n ) && ! empty( $n['elements'] ) && is_array( $n['elements'] ) ) {
+				$seen = self::ids( $n['elements'], $seen );
+			}
+		}
+		return $seen;
+	}
+
+	/**
+	 * Check a tree and give every element an id.
+	 *
+	 * Ids are assigned here rather than accepted from the caller. Elementor
+	 * uses the id to address an element for editing and for its generated CSS
+	 * selector, so two elements sharing one is not a cosmetic problem: the
+	 * second becomes unaddressable and inherits the first's styling.
+	 *
+	 * Unknown widget types are refused. Unknown setting keys are not - a
+	 * control can be added by a third-party plugin at render time, and
+	 * refusing those would make the ability unusable on a real site - but they
+	 * are collected and reported, because a mistyped key is dropped by
+	 * Elementor without a word and the element comes out blank.
+	 *
+	 * @param array<string,mixed> $node
+	 * @param array<string,bool>  $used
+	 * @param array<string,mixed> $report
+	 * @return array<string,mixed>|\WP_Error
+	 */
+	private static function prepare( array $node, array &$used, array &$report ) {
+		$type = (string) ( $node['elType'] ?? '' );
+		if ( ! in_array( $type, [ 'container', 'section', 'column', 'widget' ], true ) ) {
+			return new \WP_Error(
+				'niranzwp_bad_element',
+				sprintf( 'elType must be container, section, column or widget; got "%s".', $type )
+			);
+		}
+
+		$out = [ 'elType' => $type ];
+
+		if ( 'widget' === $type ) {
+			$widget_type = (string) ( $node['widgetType'] ?? '' );
+			$wm          = self::widget_manager();
+			if ( '' === $widget_type ) {
+				return new \WP_Error( 'niranzwp_bad_element', 'A widget needs a widgetType.' );
+			}
+			if ( $wm && ! $wm->get_widget_types( $widget_type ) ) {
+				return new \WP_Error(
+					'niranzwp_unknown_widget',
+					sprintf( 'No widget type "%s" on this site. Call elementor-widgets for the list.', $widget_type )
+				);
+			}
+			$out['widgetType'] = $widget_type;
+
+			$settings = isset( $node['settings'] ) && is_array( $node['settings'] ) ? $node['settings'] : [];
+			if ( $wm && $settings ) {
+				$widget = $wm->get_widget_types( $widget_type );
+				$known  = $widget ? array_keys( $widget->get_controls() ) : [];
+				foreach ( array_keys( $settings ) as $key ) {
+					$base = preg_replace( '/_(tablet|mobile|laptop|widescreen|mobile_extra|tablet_extra)$/', '', (string) $key );
+					if ( ! in_array( (string) $key, $known, true ) && ! in_array( (string) $base, $known, true ) ) {
+						$report['unknown_settings'][] = $widget_type . '.' . $key;
+					}
+				}
+			}
+			$out['settings'] = (object) $settings;
+		} else {
+			$out['settings'] = (object) ( isset( $node['settings'] ) && is_array( $node['settings'] ) ? $node['settings'] : [] );
+		}
+
+		// Seven lowercase hex characters, which is the shape Elementor's own
+		// editor generates. Loop rather than trust randomness on a page that
+		// may already hold hundreds of ids.
+		do {
+			$id = substr( bin2hex( random_bytes( 4 ) ), 0, 7 );
+		} while ( isset( $used[ $id ] ) );
+		$used[ $id ] = true;
+		$out['id']   = $id;
+		++$report['created'];
+
+		$children = [];
+		if ( ! empty( $node['elements'] ) && is_array( $node['elements'] ) ) {
+			foreach ( $node['elements'] as $child ) {
+				if ( ! is_array( $child ) ) {
+					return new \WP_Error( 'niranzwp_bad_element', 'Every entry in elements must be an object.' );
+				}
+				$prepared = self::prepare( $child, $used, $report );
+				if ( is_wp_error( $prepared ) ) {
+					return $prepared;
+				}
+				$children[] = $prepared;
+			}
+		}
+		$out['elements'] = $children;
+
+		return $out;
+	}
+
+	/**
+	 * Place, replace or remove a subtree at the element with $target.
+	 *
+	 * Returns the tree and whether the target was reached, so the caller can
+	 * tell "nothing matched" from "matched and removed" - which look the same
+	 * in the returned tree and mean opposite things to the person who asked.
+	 *
+	 * @param array<int,array<string,mixed>> $nodes
+	 * @param array<int,array<string,mixed>> $new
+	 * @return array{0:array<int,array<string,mixed>>,1:bool}
+	 */
+	private static function splice( array $nodes, string $target, array $new, string $where ): array {
+		$out   = [];
+		$found = false;
+
+		foreach ( $nodes as $node ) {
+			if ( is_array( $node ) && (string) ( $node['id'] ?? '' ) === $target ) {
+				$found = true;
+				switch ( $where ) {
+					case 'before':
+						foreach ( $new as $n ) {
+							$out[] = $n;
+						}
+						$out[] = $node;
+						break;
+					case 'after':
+						$out[] = $node;
+						foreach ( $new as $n ) {
+							$out[] = $n;
+						}
+						break;
+					case 'replace-element':
+						foreach ( $new as $n ) {
+							$out[] = $n;
+						}
+						break;
+					case 'delete':
+						break;
+				}
+				continue;
+			}
+
+			if ( is_array( $node ) && ! empty( $node['elements'] ) && is_array( $node['elements'] ) ) {
+				[ $kids, $hit ] = self::splice( $node['elements'], $target, $new, $where );
+				if ( $hit ) {
+					$found            = true;
+					$node['elements'] = $kids;
+				}
+			}
+			$out[] = $node;
+		}
+
+		return [ $out, $found ];
+	}
+
+	/**
+	 * @param mixed $input
+	 * @return array<string,mixed>|\WP_Error
+	 */
+	public static function write( mixed $input = [] ) {
+		$input = is_array( $input ) ? $input : [];
+
+		$id     = (int) ( $input['id'] ?? 0 );
+		$mode   = (string) ( $input['mode'] ?? 'append' );
+		$target = (string) ( $input['target'] ?? '' );
+		$dry    = ! isset( $input['dry_run'] ) || (bool) $input['dry_run'];
+		$given  = isset( $input['elements'] ) && is_array( $input['elements'] ) ? $input['elements'] : [];
+
+		if ( ! self::available() ) {
+			return new \WP_Error( 'niranzwp_no_elementor', 'Elementor is not active on this site.' );
+		}
+		if ( ! get_post( $id ) ) {
+			return new \WP_Error( 'niranzwp_not_found', 'No post with id ' . $id );
+		}
+
+		$needs_target = in_array( $mode, [ 'after', 'before', 'replace-element', 'delete' ], true );
+		if ( $needs_target && '' === $target ) {
+			return new \WP_Error( 'niranzwp_missing', sprintf( 'Mode "%s" needs a target element id.', $mode ) );
+		}
+		if ( 'delete' !== $mode && ! $given ) {
+			return new \WP_Error( 'niranzwp_missing', 'Pass the elements to write.' );
+		}
+
+		/*
+		 * An empty layout is a legitimate starting point - a page that has
+		 * never been opened in Elementor has no meta at all - so a missing
+		 * value is an empty tree rather than an error. Malformed JSON is
+		 * different and must not be overwritten silently.
+		 */
+		$raw  = get_post_meta( $id, '_elementor_data', true );
+		$data = [];
+		if ( is_string( $raw ) && '' !== trim( $raw ) ) {
+			$decoded = json_decode( $raw, true );
+			if ( ! is_array( $decoded ) ) {
+				return new \WP_Error( 'niranzwp_corrupt', sprintf( 'The Elementor data on post %d is not valid JSON. Refusing to overwrite it.', $id ) );
+			}
+			$data = $decoded;
+		}
+
+		$used   = self::ids( $data );
+		$report = [ 'created' => 0, 'unknown_settings' => [] ];
+
+		$prepared = [];
+		foreach ( $given as $node ) {
+			if ( ! is_array( $node ) ) {
+				return new \WP_Error( 'niranzwp_bad_element', 'Every entry in elements must be an object.' );
+			}
+			$one = self::prepare( $node, $used, $report );
+			if ( is_wp_error( $one ) ) {
+				return $one;
+			}
+			$prepared[] = $one;
+		}
+
+		$before_count = count( self::ids( $data ) );
+
+		switch ( $mode ) {
+			case 'replace-page':
+				$data = $prepared;
+				break;
+			case 'append':
+				$data = array_merge( $data, $prepared );
+				break;
+			case 'prepend':
+				$data = array_merge( $prepared, $data );
+				break;
+			default:
+				[ $data, $found ] = self::splice( $data, $target, $prepared, $mode );
+				if ( ! $found ) {
+					return new \WP_Error(
+						'niranzwp_element_not_found',
+						sprintf( 'No element with id "%s" on post %d. Use elementor-find to locate one.', $target, $id )
+					);
+				}
+		}
+
+		$result = [
+			'id'               => $id,
+			'mode'             => $mode,
+			'elements_added'   => $report['created'],
+			'elements_before'  => $before_count,
+			'elements_after'   => count( self::ids( $data ) ),
+			'dry_run'          => $dry,
+		];
+		if ( '' !== $target ) {
+			$result['target'] = $target;
+		}
+		if ( $report['unknown_settings'] ) {
+			$result['unknown_settings'] = array_values( array_unique( $report['unknown_settings'] ) );
+			$result['unknown_note']     = __( 'Elementor drops a setting key it does not know without saying so, and the element renders blank. Check these against elementor-widget.', 'niranzwp' );
+		}
+
+		if ( $dry ) {
+			$result['status'] = 'would_write';
+			$result['note']   = 'Nothing was written. Pass dry_run false to apply.';
+			return $result;
+		}
+
+		$json = wp_json_encode( $data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
+		if ( false === $json ) {
+			return new \WP_Error( 'niranzwp_encode_failed', 'Could not encode the layout.' );
+		}
+
+		$result['checkpoint_id'] = Checkpoint::before_post( $id, 'elementor-write' );
+
+		// Slashed on the way in, or every quote in the layout is mangled.
+		update_post_meta( $id, '_elementor_data', wp_slash( $json ) );
+
+		// The page renders from generated CSS, not from this meta.
+		if ( class_exists( '\Elementor\Plugin' ) ) {
+			\Elementor\Plugin::$instance->files_manager->clear_cache();
+			$result['css_cache_cleared'] = true;
+		}
+		clean_post_cache( $id );
+
+		$result['status'] = 'written';
 		return $result;
 	}
 
