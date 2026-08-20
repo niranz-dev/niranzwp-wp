@@ -700,9 +700,19 @@ final class Elementor {
 				continue;
 			}
 
-			if ( ! $shared && isset( self::shared_keys()[ $key ] ) ) {
-				++$skipped['shared'];
-				continue;
+			if ( ! $shared ) {
+				$common = self::shared_keys();
+				// With the shared set in hand, membership in it is the answer.
+				// Without it, fall back to the tab, which is what this used to
+				// go on: wrong for a container, but better than replying with
+				// every control on every widget.
+				$is_shared = $common
+					? isset( $common[ $key ] )
+					: 'advanced' === (string) ( $control['tab'] ?? '' );
+				if ( $is_shared ) {
+					++$skipped['shared'];
+					continue;
+				}
 			}
 
 			$label = (string) ( $control['label'] ?? '' );
