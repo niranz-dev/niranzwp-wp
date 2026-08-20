@@ -1944,32 +1944,39 @@ final class Admin {
 			.update-nag, .notice { display: none !important; }
 			html.wp-toolbar { padding-top: 0 !important; }
 			#wpcontent, #wpbody-content { margin-left: 0 !important; padding: 0 !important; }
-			#wpbody-content { padding-bottom: 48px !important; }
+			#wpbody-content { padding-bottom: 40px !important; }
 			body { background: #f0f0f1; }
 
-			/* One column, centred, and narrow enough that a line of prose does
-			   not run the width of a desktop screen. */
-			.nzwp-bar, .nzwp-setup { max-width: 680px; margin-left: auto; margin-right: auto; }
-			.nzwp-bar { margin-top: 0; border-radius: 0 0 12px 12px; }
-			/* header() prints the page title in its own block, which sits
-			   outside the centred column and reads as a second heading beside
-			   the wordmark. Brought into line with the cards. */
-			.nzwp-head { max-width: 680px; margin: 24px auto 16px; }
-			.nzwp-head h1 { margin: 0; font-size: 20px; }
-			/* The standing subtitle describes the Configuration screen. On this
-			   one the two cards say it better, and shorter. */
+			/*
+			 * The bar bleeds 20px to the left on purpose, to sit flush against
+			 * the admin menu, and .nzwp-wrap is 900px hard against the left.
+			 * With the menu gone that leaves the two centred on different
+			 * things. One measure, applied to the bar's contents and to the
+			 * wrap, puts every edge on the same line.
+			 */
+			.nzwp-bar { margin-left: 0; }
+			.nzwp-bar-in, .nzwp-wrap { max-width: 560px; margin-left: auto; margin-right: auto; }
+			.nzwp-bar-in { height: 54px; }
+			.nzwp-wrap { margin-top: 20px; }
 			.nzwp-wrap > .nzwp-sub { display: none; }
 
-			.nzwp-setup h2 { display: flex; align-items: center; gap: 10px; }
+			.nzwp-head { margin: 0 0 12px; }
+			.nzwp-head h1 { font-size: 19px; }
+
+			.nzwp-setup { padding: 16px 18px 18px; margin-bottom: 12px; }
+			.nzwp-setup h2 { display: flex; align-items: center; gap: 9px; font-size: 14px; margin-bottom: 12px; padding-bottom: 10px; }
 			.nzwp-done { color: #0a5c36; font-weight: 700; }
-			.nzwp-setup .nzwp-lead { margin: 18px 0 8px; font-weight: 600; font-size: 13px; }
-			.nzwp-setup .nzwp-lead:first-of-type { margin-top: 4px; }
-			.nzwp-setup .nzwp-desc { margin-bottom: 0; }
-			.nzwp-warn { margin: 8px 0 0; padding: 7px 11px; border-left: 3px solid #d63638; background: rgba(214,54,56,.06); }
-			.nzwp-setup-end { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+			.nzwp-setup .nzwp-lead { margin: 14px 0 6px; font-weight: 600; font-size: 13px; }
+			.nzwp-setup .nzwp-lead:first-of-type { margin-top: 2px; }
+			.nzwp-setup .nzwp-desc { margin-bottom: 0; font-size: 13px; }
+			/* The code block's own padding leaves room for the window dots
+			   drawn above the text. Overriding it put them on top of it. */
+			.nzwp-warn { margin: 7px 0 0; padding: 6px 10px; border-left: 3px solid #d63638; background: rgba(214,54,56,.06); font-size: 13px; }
+			.nzwp-setup-end { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 18px; }
 			.nzwp-setup-end .nzwp-desc { flex: 1; }
-			@media (max-width: 782px) {
-				.nzwp-bar, .nzwp-setup { margin-left: 12px; margin-right: 12px; }
+
+			@media (max-width: 640px) {
+				.nzwp-bar-in, .nzwp-wrap { margin-left: 12px; margin-right: 12px; }
 				.nzwp-setup-end { flex-direction: column; align-items: flex-start; }
 			}
 		</style>
