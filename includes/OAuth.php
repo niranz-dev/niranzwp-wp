@@ -34,6 +34,7 @@ defined( 'ABSPATH' ) || exit;
 final class OAuth {
 
 	private const NS           = 'niranzwp/v1';
+	private const LOG          = 'niranzwp_oauth_log';
 	private const CLIENTS      = 'niranzwp_oauth_clients';
 	private const TOKEN_META   = '_niranzwp_oauth_tokens';
 	private const DEVICE_TTL   = 600;    // ten minutes to type a code
@@ -103,6 +104,13 @@ final class OAuth {
 		 * into the first step of connecting.
 		 */
 		add_filter( 'rest_post_dispatch', [ self::class, 'challenge_header' ], 10, 3 );
+
+		/*
+		 * The same record the MCP endpoint keeps, for the OAuth endpoints. A
+		 * client that signs in and then does not come back has told you
+		 * nothing; what it asked for and what it was answered has.
+		 */
+		add_filter( 'rest_post_dispatch', [ self::class, 'record' ], 20, 3 );
 		add_filter( 'determine_current_user', [ self::class, 'authenticate' ], 30 );
 	}
 
@@ -206,6 +214,55 @@ final class OAuth {
 				'service_documentation'                 => 'https://niranz.dev',
 			]
 		);
+	}
+
+	/**
+	 * Note one call to an OAuth endpoint, and what it was answered with.
+	 *
+	 * No credential is ever recorded - not the code, not the token, not the
+	 * verifier. What is recorded is which endpoint, from where, which grant or
+	 * response type was asked for, whether a resource was named, and the
+	 * status. That is enough to see where a sign-in stops.
+	 *
+	 * @param \WP_HTTP_Response $response Response about to be sent.
+	 * @param \WP_REST_Server   $server   Unused.
+	 * @param \WP_REST_Request  $request  The request being answered.
+	 * @return \WP_HTTP_Response
+	 */
+	public static function record( $response, $server, $request ) {
+		if ( ! $response instanceof \WP_HTTP_Response ) {
+			return $response;
+		}
+		$route = (string) $request->get_route();
+		if ( ! str_contains( $route, '/oauth/' ) ) {
+			return $response;
+		}
+
+		$body = $response->get_data();
+		$log  = get_option( self::LOG, [] );
+		$log  = is_array( $log ) ? $log : [];
+
+		$log[] = [
+			'at'       => time(),
+			'ip'       => sanitize_text_field( (string) ( $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '' ) ),
+			'endpoint' => substr( strrchr( $route, '/' ) ?: $route, 1 ),
+			'grant'    => sanitize_text_field( (string) ( $request->get_param( 'grant_type' ) ?: $request->get_param( 'response_type' ) ?: '' ) ),
+			'resource' => sanitize_text_field( (string) $request->get_param( 'resource' ) ),
+			'scope'    => sanitize_text_field( (string) $request->get_param( 'scope' ) ),
+			'status'   => (int) $response->get_status(),
+			// The names of what came back, never the values.
+			'returned' => is_array( $body ) ? implode( ',', array_keys( $body ) ) : '',
+		];
+
+		update_option( self::LOG, array_slice( $log, -25 ), false );
+
+		return $response;
+	}
+
+	/** The recent OAuth calls, newest first. */
+	public static function recent(): array {
+		$log = get_option( self::LOG, [] );
+		return is_array( $log ) ? array_reverse( $log ) : [];
 	}
 
 	/**

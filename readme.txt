@@ -4,7 +4,7 @@ Tags: cli, rest-api, abilities, seo, automation
 Requires at least: 6.9
 Tested up to: 7.0.4
 Requires PHP: 8.0
-Stable tag: 5.3.21
+Stable tag: 5.3.22
 License: MIT
 License URI: https://opensource.org/licenses/MIT
 
@@ -104,6 +104,13 @@ or capturable, and wp-admin and wp-includes cannot be written to.
 3. Check NiranzWP > Troubleshoot if anything looks wrong.
 
 == Changelog ==
+
+= 5.3.22 =
+* Troubleshoot also lists the recent sign-in requests: which OAuth endpoint was
+  reached, from where, what was asked for and what came back. A sign-in that
+  stops halfway leaves a shape there, and where the list stops is where the
+  sign-in stopped. No credential is recorded - not a code, not a token, not a
+  verifier - only the names of what was returned.
 
 = 5.3.21 =
 * Fixed: the authorization endpoint has moved out of /wp-json and into

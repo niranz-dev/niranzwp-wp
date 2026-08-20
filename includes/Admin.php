@@ -1815,6 +1815,7 @@ final class Admin {
 		echo '</tbody></table></div>';
 
 		self::render_mcp_log();
+		self::render_oauth_log();
 
 		echo '</div>';
 	}
@@ -1856,6 +1857,51 @@ final class Admin {
 							<td><?php echo esc_html( '' !== $r['call'] ? (string) $r['call'] : (string) $r['method'] ); ?></td>
 							<td><?php echo esc_html( (string) $r['auth'] ); ?></td>
 							<td><?php echo esc_html( (string) $r['status'] ); ?></td>
+						</tr>
+					<?php endforeach; ?>
+					</tbody>
+				</table>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * What has reached the OAuth endpoints.
+	 *
+	 * A sign-in that stops halfway leaves a shape here: which endpoint was
+	 * last reached, and with what. No credential is recorded - only which
+	 * endpoint, from where, what was asked for, and what came back.
+	 */
+	private static function render_oauth_log(): void {
+		$rows = OAuth::recent();
+		?>
+		<div class="nzwp-card">
+			<h2><?php esc_html_e( 'Recent sign-in requests', 'niranzwp' ); ?></h2>
+			<p class="nzwp-desc" style="margin-top:0">
+				<?php esc_html_e( 'The OAuth endpoints, newest first. Where the list stops is where the sign-in stopped.', 'niranzwp' ); ?>
+			</p>
+			<?php if ( ! $rows ) : ?>
+				<p><?php esc_html_e( 'Nothing yet.', 'niranzwp' ); ?></p>
+			<?php else : ?>
+				<table class="widefat striped">
+					<thead><tr>
+						<th><?php esc_html_e( 'When', 'niranzwp' ); ?></th>
+						<th><?php esc_html_e( 'From', 'niranzwp' ); ?></th>
+						<th><?php esc_html_e( 'Endpoint', 'niranzwp' ); ?></th>
+						<th><?php esc_html_e( 'Asked for', 'niranzwp' ); ?></th>
+						<th><?php esc_html_e( 'Answered', 'niranzwp' ); ?></th>
+						<th><?php esc_html_e( 'Came back', 'niranzwp' ); ?></th>
+					</tr></thead>
+					<tbody>
+					<?php foreach ( $rows as $r ) : ?>
+						<tr>
+							<td><?php echo esc_html( wp_date( 'H:i:s', (int) $r['at'] ) ); ?></td>
+							<td><code><?php echo esc_html( (string) $r['ip'] ); ?></code></td>
+							<td><?php echo esc_html( (string) $r['endpoint'] ); ?></td>
+							<td><?php echo esc_html( trim( $r['grant'] . ' ' . $r['scope'] ) ); ?></td>
+							<td><?php echo esc_html( (string) $r['status'] ); ?></td>
+							<td><code style="font-size:11px"><?php echo esc_html( (string) $r['returned'] ); ?></code></td>
 						</tr>
 					<?php endforeach; ?>
 					</tbody>
