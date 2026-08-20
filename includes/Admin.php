@@ -21,6 +21,7 @@ final class Admin {
 	private const TOGGLE_NONCE = 'niranzwp_toggle';
 	private const APPROVE_NONCE = 'niranzwp_approve';
 	private const AUTHZ_NONCE   = 'niranzwp_authorize';
+	private const SETUP_NONCE   = 'niranzwp_setup';
 
 	/** Set when the toolbar badge is added, read when its styles are printed. */
 	private static bool $badge_rendered = false;
@@ -32,6 +33,8 @@ final class Admin {
 		add_action( 'admin_post_niranzwp_approve', [ self::class, 'handle_approve' ] );
 		add_action( 'admin_post_niranzwp_authorize', [ self::class, 'handle_authorize' ] );
 		add_action( 'admin_notices', [ self::class, 'activation_notice' ] );
+		add_action( 'admin_post_niranzwp_setup', [ self::class, 'handle_setup' ] );
+		add_action( 'admin_init', [ self::class, 'setup_redirect' ] );
 		add_action( 'admin_bar_menu', [ self::class, 'admin_bar' ], 100 );
 		/*
 		 * Printed immediately before the toolbar itself rather than in either
@@ -124,6 +127,7 @@ final class Admin {
 		// The device-code screen. Registered under a null parent so it has a URL
 		// to send someone to without adding a menu row nobody navigates to.
 		self::no_frames( add_submenu_page( null, __( 'Connect a tool', 'niranzwp' ), __( 'Connect a tool', 'niranzwp' ), CAPABILITY, self::SLUG . '-connect', [ self::class, 'render_connect' ] ) );
+		self::no_frames( add_submenu_page( null, __( 'Set up NiranzWP', 'niranzwp' ), __( 'Set up NiranzWP', 'niranzwp' ), CAPABILITY, self::SLUG . '-setup', [ self::class, 'render_setup' ] ) );
 	}
 
 	/**
@@ -330,6 +334,29 @@ final class Admin {
 	 * Skipped when abilities are already on, which is the case on a
 	 * reactivation - there is nothing to point at then.
 	 */
+	/**
+	 * Send someone who has just activated the plugin to the setup screen.
+	 *
+	 * A notice was not enough. Nothing works until abilities are switched on,
+	 * and even then the address a client needs is not written anywhere someone
+	 * would look. This happens once: the transient is spent whether the screen
+	 * is used or closed, and bulk activation is left alone because there is no
+	 * one screen to send that to.
+	 */
+	public static function setup_redirect(): void {
+		if ( ! get_transient( 'niranzwp_just_activated' ) ) {
+			return;
+		}
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( ! empty( $_GET['activate-multi'] ) || wp_doing_ajax() || ! current_user_can( CAPABILITY ) ) {
+			return;
+		}
+		delete_transient( 'niranzwp_just_activated' );
+
+		wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '-setup' ) );
+		exit;
+	}
+
 	public static function activation_notice(): void {
 		if ( ! get_transient( 'niranzwp_just_activated' ) ) {
 			return;
@@ -1807,5 +1834,159 @@ final class Admin {
 		];
 
 		return $out;
+	}
+	/**
+	 * The screen someone lands on the first time.
+	 *
+	 * One screen, not a sequence. A wizard earns its steps when there are many
+	 * decisions; here there are two, and pretending otherwise only adds clicks.
+	 *
+	 * What it is really for is the endpoint. Everything else on this page can
+	 * be found by looking around wp-admin. That address cannot, and every
+	 * client needs it.
+	 */
+	public static function render_setup(): void {
+		self::header( __( 'Set up NiranzWP', 'niranzwp' ) );
+		self::setup_fullscreen();
+
+		$on       = Settings::enabled();
+		$endpoint = Mcp::endpoint();
+		$site     = untrailingslashit( home_url() );
+		$insecure = ! is_ssl() && 'local' !== wp_get_environment_type();
+		?>
+		<div class="nzwp-card nzwp-setup">
+			<h2>
+				<span class="nzwp-num">1</span><?php esc_html_e( 'Switch abilities on', 'niranzwp' ); ?>
+				<?php if ( $on ) : ?><span class="nzwp-done">&#10003;</span><?php endif; ?>
+			</h2>
+
+			<?php if ( $on ) : ?>
+				<p class="nzwp-desc"><?php esc_html_e( 'On. The filesystem and PHP are still off.', 'niranzwp' ); ?></p>
+			<?php else : ?>
+				<p class="nzwp-desc"><?php esc_html_e( 'Nothing can reach this site until this is on. The filesystem and PHP stay off.', 'niranzwp' ); ?></p>
+				<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+					<input type="hidden" name="action" value="niranzwp_setup">
+					<input type="hidden" name="enable" value="1">
+					<?php wp_nonce_field( self::SETUP_NONCE ); ?>
+					<?php submit_button( __( 'Switch on', 'niranzwp' ), 'primary', 'submit', false ); ?>
+				</form>
+			<?php endif; ?>
+		</div>
+
+		<div class="nzwp-card nzwp-setup">
+			<h2><span class="nzwp-num">2</span><?php esc_html_e( 'Connect a client', 'niranzwp' ); ?></h2>
+
+			<p class="nzwp-lead"><?php esc_html_e( 'An AI client or connector - add this as an MCP server.', 'niranzwp' ); ?></p>
+			<div class="nzwp-copywrap">
+				<button type="button" class="nzwp-copy"><?php esc_html_e( 'Copy', 'niranzwp' ); ?></button>
+				<div class="nzwp-code"><?php echo esc_html( $endpoint ); ?></div>
+			</div>
+			<?php if ( $insecure ) : ?>
+				<p class="nzwp-warn"><?php esc_html_e( 'This site is not on HTTPS, so a connector cannot reach it.', 'niranzwp' ); ?></p>
+			<?php endif; ?>
+
+			<p class="nzwp-lead"><?php esc_html_e( 'A terminal - install the CLI and sign in.', 'niranzwp' ); ?></p>
+			<div class="nzwp-copywrap">
+				<button type="button" class="nzwp-copy"><?php esc_html_e( 'Copy', 'niranzwp' ); ?></button>
+				<div class="nzwp-code"><?php echo esc_html( 'npm i -g niranzwp && niranzwp auth login ' . $site ); ?></div>
+			</div>
+
+			<p class="nzwp-desc">
+				<?php
+				printf(
+					/* translators: 1: link to the profile screen, 2: link to the connection guide. */
+					esc_html__( 'Either way you approve it here, as yourself. A client that cannot do OAuth can use an %1$s instead. %2$s', 'niranzwp' ),
+					'<a href="' . esc_url( admin_url( 'profile.php#application-passwords-section' ) ) . '">' . esc_html__( 'application password', 'niranzwp' ) . '</a>',
+					'<a href="' . esc_url( GITHUB_URL ) . '/blob/main/docs/connecting.md" target="_blank" rel="noopener noreferrer">' . esc_html__( 'Connection guide', 'niranzwp' ) . '</a>'
+				);
+				?>
+			</p>
+		</div>
+
+		<div class="nzwp-card nzwp-setup nzwp-setup-end">
+			<p class="nzwp-desc">
+				<?php esc_html_e( 'Every write previews first and leaves a snapshot. End a connection any time on Connections.', 'niranzwp' ); ?>
+			</p>
+			<a class="button button-primary" href="<?php echo esc_url( admin_url( 'admin.php?page=' . self::SLUG ) ); ?>">
+				<?php esc_html_e( 'Done', 'niranzwp' ); ?>
+			</a>
+		</div>
+
+		<script>
+		document.querySelectorAll('.nzwp-setup .nzwp-copy').forEach(function (btn) {
+			btn.addEventListener('click', function () {
+				navigator.clipboard.writeText(btn.parentNode.querySelector('.nzwp-code').innerText).then(function () {
+					var was = btn.textContent;
+					btn.textContent = <?php echo wp_json_encode( __( 'Copied', 'niranzwp' ) ); ?>;
+					btn.classList.add('done');
+					setTimeout(function () { btn.textContent = was; btn.classList.remove('done'); }, 1600);
+				});
+			});
+		});
+		</script>
+		<?php
+		echo '</div>';
+	}
+
+	/**
+	 * Take the admin furniture off this one screen.
+	 *
+	 * The menu, the toolbar and the footer are navigation, and there is nowhere
+	 * to navigate to yet. They are hidden with CSS rather than by unhooking, so
+	 * nothing about the rest of wp-admin changes and leaving this screen leaves
+	 * no trace. The way out is the Done button; there is no back to be stranded
+	 * without.
+	 */
+	private static function setup_fullscreen(): void {
+		?>
+		<style>
+			#adminmenumain, #wpadminbar, #wpfooter, #screen-meta, #screen-meta-links,
+			.update-nag, .notice { display: none !important; }
+			html.wp-toolbar { padding-top: 0 !important; }
+			#wpcontent, #wpbody-content { margin-left: 0 !important; padding: 0 !important; }
+			#wpbody-content { padding-bottom: 48px !important; }
+			body { background: #f0f0f1; }
+
+			/* One column, centred, and narrow enough that a line of prose does
+			   not run the width of a desktop screen. */
+			.nzwp-bar, .nzwp-setup { max-width: 680px; margin-left: auto; margin-right: auto; }
+			.nzwp-bar { margin-top: 0; border-radius: 0 0 12px 12px; }
+			/* header() prints the page title in its own block, which sits
+			   outside the centred column and reads as a second heading beside
+			   the wordmark. Brought into line with the cards. */
+			.nzwp-head { max-width: 680px; margin: 24px auto 16px; }
+			.nzwp-head h1 { margin: 0; font-size: 20px; }
+			/* The standing subtitle describes the Configuration screen. On this
+			   one the two cards say it better, and shorter. */
+			.nzwp-wrap > .nzwp-sub { display: none; }
+
+			.nzwp-setup h2 { display: flex; align-items: center; gap: 10px; }
+			.nzwp-done { color: #0a5c36; font-weight: 700; }
+			.nzwp-setup .nzwp-lead { margin: 18px 0 8px; font-weight: 600; font-size: 13px; }
+			.nzwp-setup .nzwp-lead:first-of-type { margin-top: 4px; }
+			.nzwp-setup .nzwp-desc { margin-bottom: 0; }
+			.nzwp-warn { margin: 8px 0 0; padding: 7px 11px; border-left: 3px solid #d63638; background: rgba(214,54,56,.06); }
+			.nzwp-setup-end { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+			.nzwp-setup-end .nzwp-desc { flex: 1; }
+			@media (max-width: 782px) {
+				.nzwp-bar, .nzwp-setup { margin-left: 12px; margin-right: 12px; }
+				.nzwp-setup-end { flex-direction: column; align-items: flex-start; }
+			}
+		</style>
+		<?php
+	}
+
+	public static function handle_setup(): void {
+		if ( ! current_user_can( CAPABILITY ) || ! check_admin_referer( self::SETUP_NONCE ) ) {
+			wp_die( esc_html__( 'You are not allowed to do that.', 'niranzwp' ), '', [ 'response' => 403 ] );
+		}
+
+		if ( isset( $_POST['enable'] ) ) {
+			Settings::set_enabled( true );
+			Settings::remember_domain();
+		}
+
+		wp_safe_redirect( admin_url( 'admin.php?page=' . self::SLUG . '-setup' ) );
+		exit;
 	}
 }
