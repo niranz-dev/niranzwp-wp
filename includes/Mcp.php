@@ -329,6 +329,23 @@ final class Mcp {
 		$request->set_query_params( wp_unslash( $_GET ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$request->set_body( (string) file_get_contents( 'php://input' ) );
 
+		/*
+		 * Forget whoever WordPress thinks this is, and ask again.
+		 *
+		 * On a /wp-json request nothing runs before REST serves, so the
+		 * first call to wp_get_current_user() happens with the bearer
+		 * filter in place and the token is honoured. This is a front-end
+		 * request: by now something during boot has already resolved the
+		 * current user as anonymous and cached it, and the dispatch below
+		 * would inherit that answer. The same token that returned a full
+		 * MCP response on the REST path returned rest_forbidden here -
+		 * which is what claude.ai's connector was being told on every
+		 * authenticated call while its list said "no tools available".
+		 */
+		global $current_user;
+		$current_user = null;
+		wp_get_current_user();
+
 		$server   = rest_get_server();
 		$response = $server->dispatch( $request );
 		// serve_request() would apply this; an internal dispatch has to do it

@@ -105,6 +105,13 @@ or capturable, and wp-admin and wp-includes cannot be written to.
 
 == Changelog ==
 
+= 5.3.27 =
+* Fixed: the /mcp address rejected every bearer token. A front-end request has
+  its current user resolved as anonymous long before the alias dispatches, and
+  the dispatch inherited that answer; the alias now re-determines the user with
+  the Authorization header in hand. This is what the claude.ai connector was
+  hitting behind "This connector has no tools available".
+
 = 5.3.26 =
 * Fixed: 5.3.25 named the new /mcp address in the discovery document served at
   the old address, which broke re-authentication for clients configured with
