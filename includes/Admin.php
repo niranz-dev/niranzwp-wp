@@ -725,6 +725,12 @@ final class Admin {
    colour is already spent. Offset so the rule clears the descender in the
    j, and in the bar's own dimmed white so it states the link without
    drawing a second hard line next to the divider. */
+/* The colour is restated on every interactive state because wp-admin ships
+   `a:hover,a:active{color:#135e96}` - one element plus one pseudo-class,
+   which outranks a bare class and turned this link admin-blue on a purple
+   bar. Naming the states here is what keeps it white. */
+.nzwp-by:link,.nzwp-by:visited{color:#fff}
+.nzwp-by:hover,.nzwp-by:focus,.nzwp-by:active{color:#fff}
 .nzwp-by:hover{text-decoration:underline;text-decoration-color:rgba(255,255,255,.55);text-underline-offset:3px}
 .nzwp-by:focus-visible{outline:2px solid #fff;outline-offset:3px;border-radius:3px}
 /* Same divider treatment as the attribution, so the three items read as one
@@ -753,6 +759,7 @@ final class Admin {
    Keyboard focus then needs its own cue, because it can no longer borrow the
    hover colour. A ring rather than a scale: focus has to be unmistakable at a
    glance, which a 9% size change is not. */
+.nzwp-gh:link,.nzwp-gh:visited,.nzwp-gh:hover,.nzwp-gh:focus,.nzwp-gh:active{background-color:#fff;box-shadow:none}
 .nzwp-gh:hover{filter:drop-shadow(0 0 5px rgba(255,255,255,.75))}
 .nzwp-gh:focus-visible{outline:2px solid #fff;outline-offset:3px;border-radius:3px}
 @media(prefers-reduced-motion:reduce){.nzwp-gh{transition:none}}
@@ -1961,11 +1968,48 @@ final class Admin {
 				'label'  => 'Abilities enabled',
 				'detail' => Settings::active() ? 'On for ' . Settings::current_domain() . '.' : 'Off. Enable them under Configuration.',
 			],
-			[
-				'status' => 'production' === $env ? 'warn' : 'pass',
-				'label'  => 'Environment',
-				'detail' => 'Reported as "' . $env . '".' . ( 'production' === $env ? ' Prefer staging for agent work.' : '' ),
-			],
+			/*
+			 * Two different things are being said here, and the first draft
+			 * only said one of them.
+			 *
+			 * Warning on "production" is the point: an agent with write access
+			 * belongs on staging. But everything else passed green, including
+			 * a live HTTPS site reporting itself as "local" because
+			 * WP_ENVIRONMENT_TYPE was never defined - the one case where the
+			 * value itself is the problem. That site was given a tick and no
+			 * hint, while three checks in this same file quietly relax
+			 * themselves when the environment is local.
+			 */
+			( static function () use ( $env, $https ): array {
+				// A public hostname, spelled out rather than guessed at: no
+				// core function answers this, and inventing one that reads
+				// plausibly is how the setup screen fataled once already.
+				$host  = strtolower( (string) wp_parse_url( home_url(), PHP_URL_HOST ) );
+				$is_ip     = false !== filter_var( $host, FILTER_VALIDATE_IP );
+				$is_public = false !== filter_var( $host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE );
+
+				$local = 'localhost' === $host
+					|| str_ends_with( $host, '.local' )
+					|| str_ends_with( $host, '.test' )
+					|| str_ends_with( $host, '.localhost' )
+					|| ( $is_ip && ! $is_public );
+
+				$misreported = 'production' !== $env && $https && ! $local;
+
+				if ( $misreported ) {
+					return [
+						'status' => 'warn',
+						'label'  => 'Environment',
+						'detail' => 'Reported as "' . $env . '", but this site is served over HTTPS on a public host. WP_ENVIRONMENT_TYPE is probably unset; other plugins branch on it too.',
+					];
+				}
+
+				return [
+					'status' => 'production' === $env ? 'warn' : 'pass',
+					'label'  => 'Environment',
+					'detail' => 'Reported as "' . $env . '".' . ( 'production' === $env ? ' Prefer staging for agent work.' : '' ),
+				];
+			} )(),
 		];
 
 		return $out;

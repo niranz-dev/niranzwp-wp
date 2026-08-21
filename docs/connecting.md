@@ -52,6 +52,45 @@ tool everything you can do on the site.
 Requires HTTPS. A connector runs on someone else's servers and cannot reach
 `http://` or a hostname only your machine resolves.
 
+**As of August 2026 this does not finish on claude.ai.** The flow completes —
+registration, approval, and a token issued with every field a client asked for —
+and then the follow-up request to the MCP endpoint arrives with no
+`Authorization` header, or not at all. The client reports that authorization
+failed.
+
+This is not something a server can fix. The same symptom is reported against
+unrelated stacks — Entra ID, Clerk, n8n — and against two servers built to the
+spec and tested side by side:
+[#690](https://github.com/anthropics/claude-ai-mcp/issues/690),
+[#393](https://github.com/anthropics/claude-ai-mcp/issues/393),
+[#506](https://github.com/anthropics/claude-ai-mcp/issues/506),
+[#315](https://github.com/anthropics/claude-ai-mcp/issues/315).
+
+Before concluding you have hit it, read **NiranzWP → Troubleshoot**. A token
+issued with `last_used: never`, followed by a request logged as `auth: none`,
+is this and nothing else. Anything else in that log is worth reading first.
+
+Use Claude Code instead, which authenticates against the same endpoint and
+works.
+
+## From a phone
+
+There is no separate mobile client, and the connector is the path that would
+have provided one. Remote Control provides it instead: it attaches the Claude
+app to a Claude Code session already running on your machine, so the session's
+MCP servers, files, and shell are the ones it reaches.
+
+```bash
+claude --remote-control
+```
+
+Or `/remote-control` inside a session that is already open. Scan the QR code
+the terminal prints, or open the app, tap **Code**, and pick the session.
+
+Your machine has to stay awake. The session lives there; the phone is only a
+window onto it. Run `/remote-control` again to disconnect, and see
+**Trusted devices** in claude.ai account settings to revoke a device outright.
+
 ## What the site publishes
 
 | Document | Says |
@@ -83,3 +122,5 @@ approval does not touch the others.
 | `Dynamic Client Registration rejected` | The redirect address was refused. It must be `https`, or `http` on `localhost` / `127.0.0.1`. |
 | `MCP endpoint not found` | Wrong URL, or abilities are switched off on the site. |
 | `401` with no `WWW-Authenticate` | An older version. Update the plugin. |
+| The server is missing from `claude mcp list` | It was added to one directory. `claude mcp add --scope user` puts it in every directory instead. |
+| Authorization succeeds and the client still says it failed | The claude.ai connector bug above. Confirm it in Troubleshoot before spending time on it. |

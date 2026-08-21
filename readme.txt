@@ -105,6 +105,33 @@ or capturable, and wp-admin and wp-includes cannot be written to.
 
 == Changelog ==
 
+= 5.3.23 =
+* Fixed: the schema audit counted per-post schema meta and called everything
+  else missing. Rank Math applies a default per post type and a post carries
+  that schema with no meta of its own, so a site that leaves the default alone
+  read as 0% covered while every page in fact emitted its schema. On one site
+  that was 57,417 posts reported missing and three actually missing. The
+  default is now the baseline, per-post meta is the exception either way, and
+  the setting behind the number is reported alongside it.
+* Fixed: the GEO check treated every AI crawler as one kind, so a site that
+  blocked model training while leaving the answer engines open was told it
+  "cannot be cited" by seven of them. Blocking a training crawler is a
+  licensing choice and changes nothing about citation - Google states
+  Google-Extended affects neither Search inclusion nor ranking. Only an answer
+  crawler being turned away is raised as an issue now; the training list is
+  reported as fact.
+* Troubleshoot warns when the environment type is misreported: a site served
+  over HTTPS on a public host but reporting itself as local has almost
+  certainly never had WP_ENVIRONMENT_TYPE defined, and three checks in that
+  same screen quietly relax themselves when it reads local.
+* Fixed: the attribution link in the plugin bar turned admin-blue on hover.
+  wp-admin ships a:hover with an element and a pseudo-class, which outranks a
+  bare class, so the colour had to be restated on every interactive state.
+* Documentation covers reaching the site from a phone through Remote Control,
+  and records that claude.ai custom connectors currently complete the OAuth
+  flow and then never send the token - an upstream fault, with the issues to
+  read and the log to confirm it against before spending time on it.
+
 = 5.3.22 =
 * Troubleshoot also lists the recent sign-in requests: which OAuth endpoint was
   reached, from where, what was asked for and what came back. A sign-in that

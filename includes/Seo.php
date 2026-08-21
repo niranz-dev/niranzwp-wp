@@ -21,19 +21,35 @@ defined( 'ABSPATH' ) || exit;
 
 final class Seo {
 
-	/** AI crawlers worth knowing about, and who operates them. */
+	/**
+	 * AI crawlers worth knowing about, who operates them, and what blocking
+	 * one actually costs.
+	 *
+	 * The two kinds are not interchangeable, and treating them as one produced
+	 * the wrong answer on a live site: seven agents blocked, reported as "this
+	 * site cannot be cited", while the site was in fact citable by every
+	 * answer engine listed. Only the training crawlers were shut out.
+	 *
+	 * 'answer' - fetches a page to answer a question now. Block it and you
+	 *            forfeit citations from that engine. This is an SEO decision.
+	 * 'training' - collects pages to train a model. Block it and nothing about
+	 *            being cited changes; Google says Google-Extended affects
+	 *            neither Search inclusion nor ranking, and AI Overviews are
+	 *            built from the Search index. This is a licensing decision,
+	 *            and a defensible one either way.
+	 */
 	private const AI_CRAWLERS = [
-		'GPTBot'            => 'OpenAI (ChatGPT training)',
-		'OAI-SearchBot'     => 'OpenAI (ChatGPT search)',
-		'ChatGPT-User'       => 'OpenAI (user-initiated fetch)',
-		'ClaudeBot'         => 'Anthropic (Claude training)',
-		'Claude-User'       => 'Anthropic (user-initiated fetch)',
-		'PerplexityBot'     => 'Perplexity',
-		'Google-Extended'   => 'Google (Gemini / AI Overviews)',
-		'Applebot-Extended' => 'Apple Intelligence',
-		'CCBot'             => 'Common Crawl (feeds many models)',
-		'Bytespider'        => 'ByteDance',
-		'meta-externalagent' => 'Meta AI',
+		'GPTBot'             => [ 'OpenAI (ChatGPT training)',        'training' ],
+		'OAI-SearchBot'      => [ 'OpenAI (ChatGPT search)',          'answer' ],
+		'ChatGPT-User'       => [ 'OpenAI (user-initiated fetch)',    'answer' ],
+		'ClaudeBot'          => [ 'Anthropic (Claude training)',      'training' ],
+		'Claude-User'        => [ 'Anthropic (user-initiated fetch)', 'answer' ],
+		'PerplexityBot'      => [ 'Perplexity',                       'answer' ],
+		'Google-Extended'    => [ 'Google (Gemini grounding)',        'training' ],
+		'Applebot-Extended'  => [ 'Apple Intelligence',               'training' ],
+		'CCBot'              => [ 'Common Crawl (feeds many models)', 'training' ],
+		'Bytespider'         => [ 'ByteDance',                        'training' ],
+		'meta-externalagent' => [ 'Meta AI',                          'training' ],
 	];
 
 	public static function register( callable|array $gate ): void {
@@ -294,16 +310,25 @@ final class Seo {
 		}
 
 		$crawlers = [];
-		foreach ( self::AI_CRAWLERS as $agent => $owner ) {
+		foreach ( self::AI_CRAWLERS as $agent => $about ) {
+			[ $owner, $kind ] = $about;
 			$blocked = false;
 			// Find the block for this agent and look for a bare "Disallow: /".
 			if ( $robots && preg_match( '/User-agent:\s*' . preg_quote( $agent, '/' ) . '\s*(.*?)(?=User-agent:|$)/is', $robots, $m ) ) {
 				$blocked = (bool) preg_match( '/Disallow:\s*\/\s*$/im', $m[1] );
 			}
-			$crawlers[ $agent ] = [ 'owner' => $owner, 'blocked' => $blocked ];
+			$crawlers[ $agent ] = [ 'owner' => $owner, 'kind' => $kind, 'blocked' => $blocked ];
 		}
 
-		$blocked_list = array_keys( array_filter( $crawlers, static fn( array $c ): bool => $c['blocked'] ) );
+		$blocked_answer = array_keys( array_filter(
+			$crawlers,
+			static fn( array $c ): bool => $c['blocked'] && 'answer' === $c['kind']
+		) );
+		$blocked_training = array_keys( array_filter(
+			$crawlers,
+			static fn( array $c ): bool => $c['blocked'] && 'training' === $c['kind']
+		) );
+		$blocked_list = array_merge( $blocked_answer, $blocked_training );
 
 		// llms.txt -- an emerging convention telling models what a site is about.
 		$llms      = wp_remote_get( $home . '/llms.txt', [ 'timeout' => 10 ] );
@@ -312,11 +337,14 @@ final class Seo {
 		$sitemap_in_robots = (bool) ( $robots && stripos( $robots, 'sitemap:' ) !== false );
 
 		$issues = [];
-		if ( $blocked_list ) {
+		// Only an answer crawler being turned away costs a citation. A blocked
+		// training crawler is a licensing choice with no bearing on whether
+		// the site can be cited, so it is stated rather than flagged.
+		if ( $blocked_answer ) {
 			$issues[] = [
-				'key'      => 'ai_crawlers_blocked',
+				'key'      => 'answer_crawlers_blocked',
 				'severity' => 'high',
-				'message'  => 'Blocked from AI answer engines: ' . implode( ', ', $blocked_list ) . '. This site cannot be cited by them.',
+				'message'  => 'Blocked from AI answer engines: ' . implode( ', ', $blocked_answer ) . '. Those engines cannot cite this site.',
 			];
 		}
 		// Deliberately not an issue. Google lists llms.txt among the things
@@ -348,6 +376,11 @@ final class Seo {
 			'sitemap_in_robots' => $sitemap_in_robots,
 			'ai_crawlers'       => $crawlers,
 			'blocked_count'     => count( $blocked_list ),
+			'blocked_answer'    => $blocked_answer,
+			'blocked_training'  => $blocked_training,
+			'training_note'     => $blocked_training
+				? 'Blocked from model training: ' . implode( ', ', $blocked_training ) . '. This does not affect whether the site can be cited, and Google states Google-Extended affects neither Search inclusion nor ranking.'
+				: 'No training crawler is blocked.',
 			'issues'            => $issues,
 			'issue_count'       => count( $issues ),
 		];

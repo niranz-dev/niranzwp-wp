@@ -347,21 +347,48 @@ final class Content {
 			$post_type
 		) );
 
-		// Rank Math stores one row per schema block, keyed rank_math_schema_*.
-		$with_schema = (int) $wpdb->get_var( $wpdb->prepare(
+		/*
+		 * Counting per-post schema meta and calling the rest missing was wrong
+		 * on every site that leaves the default alone - which is most of them.
+		 * Rank Math applies a default per post type from its Titles options,
+		 * and a post carries that schema with no meta of its own. On a 57,427
+		 * post site this read 0% coverage while every page in fact emitted
+		 * NewsArticle. The page said one thing and the audit said another.
+		 *
+		 * So the default is the baseline, and per-post meta is the exception
+		 * either way: it can add schema where the default is off, or turn it
+		 * off where the default is on.
+		 */
+		$titles  = get_option( 'rank-math-options-titles' );
+		$default = is_array( $titles ) ? (string) ( $titles[ 'pt_' . $post_type . '_default_rich_snippet' ] ?? '' ) : '';
+		$by_default = '' !== $default && 'off' !== $default;
+
+		// Posts that override the default, in either direction.
+		$turned_off = (int) $wpdb->get_var( $wpdb->prepare(
 			"SELECT COUNT(DISTINCT p.ID)
 			   FROM {$wpdb->posts} p
 			   JOIN {$wpdb->postmeta} m ON m.post_id = p.ID
 			  WHERE p.post_type = %s AND p.post_status = 'publish'
-			    AND ( m.meta_key LIKE %s OR m.meta_key = %s )
-			    AND m.meta_value <> ''",
+			    AND m.meta_key = 'rank_math_rich_snippet' AND m.meta_value = 'off'",
+			$post_type
+		) );
+
+		$turned_on = (int) $wpdb->get_var( $wpdb->prepare(
+			"SELECT COUNT(DISTINCT p.ID)
+			   FROM {$wpdb->posts} p
+			   JOIN {$wpdb->postmeta} m ON m.post_id = p.ID
+			  WHERE p.post_type = %s AND p.post_status = 'publish'
+			    AND ( ( m.meta_key = 'rank_math_rich_snippet' AND m.meta_value NOT IN ( '', 'off' ) )
+			       OR ( m.meta_key LIKE %s AND m.meta_value <> '' )
+			       OR ( m.meta_key = %s AND m.meta_value <> '' ) )",
 			$post_type,
 			$wpdb->esc_like( 'rank_math_schema_' ) . '%',
 			'_yoast_wpseo_schema_article_type'
 		) );
 
-		$missing = $total - $with_schema;
-		$issues  = [];
+		$with_schema = $by_default ? max( 0, $total - $turned_off ) : min( $total, $turned_on );
+		$missing     = max( 0, $total - $with_schema );
+		$issues      = [];
 
 		if ( $missing > 0 ) {
 			$issues[] = [
@@ -369,23 +396,34 @@ final class Content {
 				'severity' => $total && $missing > $total * 0.5 ? 'high' : 'medium',
 				'count'    => $missing,
 				'message'  => sprintf(
-					'%d published %s %s no structured data. Schema is how search and AI engines identify what a page is.',
+					'%d published %s %s no structured data%s. Schema is how search and AI engines identify what a page is.',
 					$missing,
 					1 === $missing ? $post_type : $post_type . 's',
-					1 === $missing ? 'carries' : 'carry'
+					1 === $missing ? 'carries' : 'carry',
+					// Which of the two causes it is decides what to do about
+					// it: one setting, or a per-post choice repeated N times.
+					$by_default
+						? ', having been switched off individually'
+						: ', because no default schema is set for this post type in Rank Math'
 				),
 			];
 		}
 
 		return [
-			'post_type'   => $post_type,
-			'published'   => $total,
-			'with_schema' => $with_schema,
-			'missing'     => $missing,
-			'coverage_pct'=> $total ? (int) round( 100 * $with_schema / $total ) : 100,
-			'issues'      => $issues,
-			'issue_count' => count( $issues ),
-			'note'        => 'Google advises against over-investing in structured data specifically for AI features; this is reported as ordinary SEO hygiene.',
+			'post_type'      => $post_type,
+			'published'      => $total,
+			'with_schema'    => $with_schema,
+			'missing'        => $missing,
+			'coverage_pct'   => $total ? (int) round( 100 * $with_schema / $total ) : 100,
+			// What produced the number, so a surprising count can be checked
+			// against the setting that caused it rather than taken on trust.
+			'default_schema' => '' === $default ? '(none set)' : $default,
+			'by_default'     => $by_default,
+			'overridden_off' => $turned_off,
+			'overridden_on'  => $turned_on,
+			'issues'         => $issues,
+			'issue_count'    => count( $issues ),
+			'note'           => 'Google advises against over-investing in structured data specifically for AI features; this is reported as ordinary SEO hygiene.',
 		];
 	}
 }
