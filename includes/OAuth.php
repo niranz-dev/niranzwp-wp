@@ -322,7 +322,19 @@ final class OAuth {
 		 * A client that only understands the bare form still finds it; the
 		 * document is served at both.
 		 */
-		$path = (string) wp_parse_url( Mcp::endpoint(), PHP_URL_PATH );
+		/*
+		 * The document for the address the client actually called, because
+		 * that is what it will compare the document against. Both addresses
+		 * of the endpoint land on this same route, so the request URI is
+		 * what tells them apart; anything unrecognised falls back to the
+		 * canonical /mcp.
+		 */
+		$asked = untrailingslashit( (string) wp_parse_url( (string) ( $_SERVER['REQUEST_URI'] ?? '' ), PHP_URL_PATH ) );
+		$known = [
+			untrailingslashit( (string) wp_parse_url( Mcp::endpoint(), PHP_URL_PATH ) ),
+			untrailingslashit( (string) wp_parse_url( Mcp::rest_endpoint(), PHP_URL_PATH ) ),
+		];
+		$path  = in_array( $asked, $known, true ) ? $asked : $known[0];
 
 		$response->header(
 			'WWW-Authenticate',
@@ -428,21 +440,31 @@ final class OAuth {
 	 * looks for after a 401 from the MCP endpoint.
 	 */
 	public static function protected_resource_document(): void {
-		if ( null === self::asked_for( 'oauth-protected-resource' ) ) {
+		$asked = self::asked_for( 'oauth-protected-resource' );
+		if ( null === $asked ) {
 			return;
 		}
 
-		wp_send_json( self::protected_resource_data() );
+		wp_send_json( self::protected_resource_data( $asked ) );
 	}
 
 	/**
 	 * The same document as a value, so it can be checked without fetching it.
 	 *
+	 * The document describes the address it was asked at, not the canonical
+	 * one. Both /mcp and the REST path are this endpoint, and a client
+	 * compares the document's resource against the URL it is actually
+	 * calling: naming /mcp to a client on the REST path failed the
+	 * comparison and broke re-authentication for every client configured
+	 * with the older address ("Protected resource ... does not match
+	 * expected"). The bare-location document names the canonical /mcp.
+	 *
+	 * @param string $asked The endpoint path the document was asked about, '' for the bare location.
 	 * @return array<string,mixed>
 	 */
-	public static function protected_resource_data(): array {
+	public static function protected_resource_data( string $asked = '' ): array {
 		return [
-			'resource'                 => Mcp::endpoint(),
+			'resource'                 => '' === $asked ? Mcp::endpoint() : home_url( $asked ),
 			'authorization_servers'    => [ untrailingslashit( home_url() ) ],
 			'scopes_supported'         => [ 'abilities' ],
 			'bearer_methods_supported' => [ 'header' ],

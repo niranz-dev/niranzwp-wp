@@ -105,6 +105,12 @@ or capturable, and wp-admin and wp-includes cannot be written to.
 
 == Changelog ==
 
+= 5.3.26 =
+* Fixed: 5.3.25 named the new /mcp address in the discovery document served at
+  the old address, which broke re-authentication for clients configured with
+  the /wp-json path. The document and the challenge header now describe the
+  address the client actually called.
+
 = 5.3.25 =
 * The MCP endpoint now answers at /mcp, served by internal dispatch to the
   same route. claude.ai's connector backend drops the token for any endpoint
