@@ -1953,6 +1953,20 @@ final class Admin {
 					? 'Loaded. Endpoint: ' . Mcp::endpoint()
 					: 'Not loaded. Install from the release ZIP, which bundles vendor dependencies.',
 			],
+			/*
+			 * The discovery chain, checked against itself rather than by hand.
+			 *
+			 * A connector reads three things in order - the challenge header,
+			 * the resource document it names, the authorization server that
+			 * document names - and each has to agree with the next. When they
+			 * disagree the client does not say so; it completes the sign-in
+			 * and then never comes back, which is indistinguishable from a
+			 * dozen other faults. This row is what tells the two apart.
+			 *
+			 * Computed, not fetched: the same values the documents are built
+			 * from, so it costs no request and cannot itself be throttled.
+			 */
+			OAuth::discovery_check(),
 			[
 				'status' => ( $https || $local ) ? 'pass' : 'fail',
 				'label'  => 'HTTPS for credentials',

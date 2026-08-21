@@ -76,6 +76,11 @@ final class OAuth {
 	 * Counted per address per hour. Generous enough that a person retrying, or
 	 * an office behind one address, never meets it.
 	 */
+	/* The discovery check makes three requests, so it is answered from cache
+	   between visits to Troubleshoot rather than on every page load. */
+	private const CHECK_CACHE    = 'niranzwp_discovery_check';
+	private const CHECK_TTL      = 900;
+
 	private const THROTTLE_WINDOW = 3600;
 	private const THROTTLE_MAX    = 30;
 
@@ -175,6 +180,16 @@ final class OAuth {
 			return;
 		}
 
+		wp_send_json( self::metadata_data() );
+	}
+
+	/**
+	 * The same document as a value, so it can be checked without fetching it.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public static function metadata_data(): array {
+
 		/*
 		 * One issuer, whichever URL the document was asked for. The RFC reads
 		 * as though the identifier should follow the path it was found under,
@@ -183,8 +198,7 @@ final class OAuth {
 		 * for one thing, and a client that binds a token to it has bound it to
 		 * something the next request does not present.
 		 */
-		wp_send_json(
-			[
+		return [
 				'issuer'                                => untrailingslashit( home_url() ),
 				'registration_endpoint'                 => rest_url( self::NS . '/oauth/register' ),
 				/*
@@ -212,8 +226,7 @@ final class OAuth {
 				'token_endpoint_auth_methods_supported' => [ 'none' ],
 				'scopes_supported'                      => [ 'abilities' ],
 				'service_documentation'                 => 'https://niranz.dev',
-			]
-		);
+		];
 	}
 
 	/**
@@ -281,18 +294,119 @@ final class OAuth {
 			return $response;
 		}
 
-		// The bare form, which is the one clients are known to accept. Every
-		// other shape is answered as well, but this is what is advertised.
+		/*
+		 * The path-preserving form, which is what RFC 9728 3.1 defines and
+		 * what a client comparing the document against the resource it asked
+		 * for expects to be handed.
+		 *
+		 * This advertised the bare form until 5.3.24, on the reasoning that
+		 * it was the shape clients accept. Both shapes are answered either
+		 * way, so nothing 404s - but the bare document then describes this
+		 * endpoint while sitting at the origin root, which is not the
+		 * resource that location stands for. Two independent servers with
+		 * the same "token minted, never used" symptom traced it to exactly
+		 * this class of mismatch:
+		 * https://github.com/anthropics/claude-ai-mcp/issues/690
+		 *
+		 * A client that only understands the bare form still finds it; the
+		 * document is served at both.
+		 */
+		$path = (string) wp_parse_url( Mcp::endpoint(), PHP_URL_PATH );
+
 		$response->header(
 			'WWW-Authenticate',
 			sprintf(
 				'Bearer realm="%s", resource_metadata="%s"',
 				esc_url_raw( home_url() ),
-				esc_url_raw( home_url( '/.well-known/oauth-protected-resource' ) )
+				esc_url_raw( home_url( '/.well-known/oauth-protected-resource' . $path ) )
 			)
 		);
 
 		return $response;
+	}
+
+	/**
+	 * Whether the three discovery documents agree with each other.
+	 *
+	 * Each link is checked against the next, in the order a client reads
+	 * them: the challenge header names a resource document, that document
+	 * names an authorization server, and the server's own metadata has to
+	 * claim that same identifier back. A mismatch anywhere is silent from the
+	 * client side - the sign-in completes and the token is never used.
+	 *
+	 * @return array{status:string,label:string,detail:string}
+	 */
+	public static function discovery_check(): array {
+		$cached = get_site_transient( self::CHECK_CACHE );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+
+		$endpoint = Mcp::endpoint();
+		$path     = (string) wp_parse_url( $endpoint, PHP_URL_PATH );
+		$issuer   = untrailingslashit( home_url() );
+		$prm_url  = home_url( '/.well-known/oauth-protected-resource' . $path );
+
+		$problems = [];
+
+		/*
+		 * Fetched, not computed.
+		 *
+		 * A first version of this built both documents from the same values it
+		 * then compared them against, so it passed on a site whose issuer had
+		 * a trailing slash and on one whose resource pointed somewhere else
+		 * entirely - it was comparing each value with itself. What breaks
+		 * discovery in practice sits between the code and the client: a
+		 * rewrite rule, a security plugin answering .well-known, a CDN
+		 * normalising the path. Only a request over the wire sees any of it.
+		 */
+		$get = static function ( string $url ): ?array {
+			$res = wp_remote_get( $url, [ 'timeout' => 8, 'redirection' => 2 ] );
+			if ( is_wp_error( $res ) || 200 !== wp_remote_retrieve_response_code( $res ) ) {
+				return null;
+			}
+			$body = json_decode( (string) wp_remote_retrieve_body( $res ), true );
+			return is_array( $body ) ? $body : null;
+		};
+
+		$prm = $get( $prm_url );
+		if ( null === $prm ) {
+			$problems[] = 'the resource document does not answer at ' . $prm_url;
+		}
+
+		$named = null === $prm ? '' : (string) ( ( $prm['authorization_servers'] ?? [] )[0] ?? '' );
+		$as    = '' === $named ? null : $get( untrailingslashit( $named ) . '/.well-known/oauth-authorization-server' );
+
+		if ( null !== $prm ) {
+			if ( untrailingslashit( (string) ( $prm['resource'] ?? '' ) ) !== untrailingslashit( $endpoint ) ) {
+				$problems[] = 'it names resource "' . ( $prm['resource'] ?? '' ) . '" rather than the MCP endpoint';
+			}
+			if ( '' === $named ) {
+				$problems[] = 'it names no authorization server';
+			} elseif ( null === $as ) {
+				$problems[] = 'the authorization server "' . $named . '" publishes no metadata';
+			} elseif ( (string) ( $as['issuer'] ?? '' ) !== $named ) {
+				// Byte-identical, not merely equivalent: a client compares
+				// these as strings and a trailing slash fails the comparison.
+				$problems[] = 'the metadata issues "' . ( $as['issuer'] ?? '' ) . '" while the resource document named "' . $named . '"';
+			}
+		}
+
+		$row = $problems
+			? [
+				'status' => 'fail',
+				'label'  => 'Discovery chain',
+				'detail' => 'Broken: ' . implode( '; ', $problems ) . '. A client will sign in and then never send the token.',
+			]
+			: [
+				'status' => 'pass',
+				'label'  => 'Discovery chain',
+				'detail' => 'Fetched and agreeing. Issuer ' . $issuer . ', advertised at ' . $prm_url,
+			];
+
+		set_site_transient( self::CHECK_CACHE, $row, self::CHECK_TTL );
+
+		return $row;
 	}
 
 	/**
@@ -307,15 +421,22 @@ final class OAuth {
 			return;
 		}
 
-		wp_send_json(
-			[
-				'resource'                 => Mcp::endpoint(),
-				'authorization_servers'    => [ untrailingslashit( home_url() ) ],
-				'scopes_supported'         => [ 'abilities' ],
-				'bearer_methods_supported' => [ 'header' ],
-				'resource_documentation'   => 'https://niranz.dev',
-			]
-		);
+		wp_send_json( self::protected_resource_data() );
+	}
+
+	/**
+	 * The same document as a value, so it can be checked without fetching it.
+	 *
+	 * @return array<string,mixed>
+	 */
+	public static function protected_resource_data(): array {
+		return [
+			'resource'                 => Mcp::endpoint(),
+			'authorization_servers'    => [ untrailingslashit( home_url() ) ],
+			'scopes_supported'         => [ 'abilities' ],
+			'bearer_methods_supported' => [ 'header' ],
+			'resource_documentation'   => 'https://niranz.dev',
+		];
 	}
 
 	public static function routes(): void {

@@ -105,6 +105,16 @@ or capturable, and wp-admin and wp-includes cannot be written to.
 
 == Changelog ==
 
+= 5.3.24 =
+* Fixed: the 401 challenge header now advertises the discovery document at its
+  path-preserving location, the shape a strict client compares against. Two
+  servers with the "signs in, token never used" connector symptom traced it to
+  this class of mismatch.
+* Troubleshoot gains a Discovery chain row: fetches the three discovery
+  documents the way a client would and says where they disagree.
+* Reconnecting clients should remove and re-add the connector once, so a fresh
+  registration binds to the corrected address.
+
 = 5.3.23 =
 * Fixed: the schema audit counted per-post schema meta and called everything
   else missing. Rank Math applies a default per post type and a post carries
