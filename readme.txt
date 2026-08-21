@@ -105,6 +105,13 @@ or capturable, and wp-admin and wp-includes cannot be written to.
 
 == Changelog ==
 
+= 5.3.25 =
+* The MCP endpoint now answers at /mcp, served by internal dispatch to the
+  same route. claude.ai's connector backend drops the token for any endpoint
+  path other than exactly /mcp (anthropics/claude-ai-mcp#878), so /mcp is now
+  the advertised address. The /wp-json address keeps working; nothing already
+  connected changes.
+
 = 5.3.24 =
 * Fixed: the 401 challenge header now advertises the discovery document at its
   path-preserving location, the shape a strict client compares against. Two

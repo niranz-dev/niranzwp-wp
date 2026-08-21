@@ -142,7 +142,16 @@ final class OAuth {
 			return '';
 		}
 
-		$endpoint = untrailingslashit( (string) wp_parse_url( Mcp::endpoint(), PHP_URL_PATH ) );
+		/*
+		 * Two addresses stand for the one endpoint - the /mcp alias that is
+		 * advertised, and the REST path that older clients still hold - and a
+		 * client may ask about either. Both are this site's own resource, so
+		 * both are answered; anything else still is not.
+		 */
+		$endpoints = [
+			untrailingslashit( (string) wp_parse_url( Mcp::endpoint(), PHP_URL_PATH ) ),
+			untrailingslashit( (string) wp_parse_url( Mcp::rest_endpoint(), PHP_URL_PATH ) ),
+		];
 
 		/*
 		 * Path insertion, which is what RFC 8414 specifies and what current
@@ -153,7 +162,7 @@ final class OAuth {
 		 */
 		if ( str_starts_with( $path, $base . '/' ) ) {
 			$suffix = substr( $path, strlen( $base ) );
-			return $suffix === $endpoint ? $suffix : null;
+			return in_array( $suffix, $endpoints, true ) ? $suffix : null;
 		}
 
 		/*
@@ -162,8 +171,10 @@ final class OAuth {
 		 * the well-known segment on the end asks this way, and answering
 		 * costs nothing.
 		 */
-		if ( $endpoint . $base === $path ) {
-			return $endpoint;
+		foreach ( $endpoints as $endpoint ) {
+			if ( $endpoint . $base === $path ) {
+				return $endpoint;
+			}
 		}
 
 		return null;

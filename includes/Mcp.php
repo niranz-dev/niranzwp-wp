@@ -21,6 +21,19 @@ defined( 'ABSPATH' ) || exit;
 final class Mcp {
 
 	public const SERVER_ID = 'niranzwp';
+
+	/*
+	 * The endpoint's public address, at the site root.
+	 *
+	 * The real route lives under /wp-json, but claude.ai's connector backend
+	 * completes the whole OAuth flow and then never sends the token unless
+	 * the endpoint path is exactly /mcp - isolated by varying only the path
+	 * against one server (anthropics/claude-ai-mcp#878, confirmed fixes in
+	 * #690). So /mcp is the advertised address, served by internal dispatch
+	 * to the same route, and the REST path keeps answering for every client
+	 * already pointed at it.
+	 */
+	public const ALIAS = '/mcp';
 	public const NAMESPACE = 'mcp';
 	public const ROUTE     = 'niranzwp';
 
@@ -59,6 +72,9 @@ final class Mcp {
 		}
 
 		add_action( 'mcp_adapter_init', [ self::class, 'register_server' ] );
+
+		// Before REST would 404 anything, same slot as the well-knowns.
+		add_action( 'parse_request', [ self::class, 'serve_alias' ], 5 );
 
 		/*
 		 * A record of what actually arrives at this endpoint. When a client
@@ -271,6 +287,63 @@ final class Mcp {
 
 	/** Where an MCP client should point, once abilities are enabled. */
 	public static function endpoint(): string {
+		return home_url( self::ALIAS );
+	}
+
+	/** The same handler at its REST address, which older clients still use. */
+	public static function rest_endpoint(): string {
 		return rest_url( self::NAMESPACE . '/' . self::ROUTE );
+	}
+
+	/**
+	 * Serve the alias by dispatching into the REST route it stands for.
+	 *
+	 * A redirect would be simpler and wrong: a client following one is
+	 * entitled to drop its Authorization header, and POST bodies do not
+	 * reliably survive the hop. Internal dispatch keeps method, body,
+	 * headers and authentication exactly as they arrived.
+	 */
+	public static function serve_alias(): void {
+		$path = untrailingslashit( (string) wp_parse_url( (string) ( $_SERVER['REQUEST_URI'] ?? '' ), PHP_URL_PATH ) );
+		if ( self::ALIAS !== $path ) {
+			return;
+		}
+
+		$method = strtoupper( (string) ( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) );
+
+		if ( 'OPTIONS' === $method ) {
+			status_header( 204 );
+			header( 'Access-Control-Allow-Origin: *' );
+			header( 'Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS' );
+			header( 'Access-Control-Allow-Headers: Authorization, Content-Type, Accept, Mcp-Session-Id, MCP-Protocol-Version, Last-Event-ID' );
+			header( 'Access-Control-Expose-Headers: Mcp-Session-Id, MCP-Protocol-Version, WWW-Authenticate' );
+			exit;
+		}
+
+		$request = new \WP_REST_Request( $method, '/' . self::NAMESPACE . '/' . self::ROUTE );
+		if ( function_exists( 'getallheaders' ) ) {
+			foreach ( (array) getallheaders() as $name => $value ) {
+				$request->set_header( (string) $name, (string) $value );
+			}
+		}
+		$request->set_query_params( wp_unslash( $_GET ) ); // phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$request->set_body( (string) file_get_contents( 'php://input' ) );
+
+		$server   = rest_get_server();
+		$response = $server->dispatch( $request );
+		// serve_request() would apply this; an internal dispatch has to do it
+		// itself or the request is neither logged nor given its challenge
+		// header on a 401.
+		$response = apply_filters( 'rest_post_dispatch', rest_ensure_response( $response ), $server, $request );
+
+		status_header( $response->get_status() );
+		header( 'Content-Type: application/json; charset=' . get_option( 'blog_charset' ) );
+		header( 'Access-Control-Expose-Headers: Mcp-Session-Id, MCP-Protocol-Version, WWW-Authenticate' );
+		foreach ( $response->get_headers() as $name => $value ) {
+			header( $name . ': ' . $value );
+		}
+
+		echo wp_json_encode( $server->response_to_data( $response, false ) );
+		exit;
 	}
 }
