@@ -3,7 +3,9 @@
 The site speaks two protocols and never a password.
 
 **Abilities over REST** — `/wp-json/wp-abilities/v1/`, what the CLI uses.
-**MCP** — `/wp-json/mcp/niranzwp`, what an MCP client uses.
+**MCP** — `/mcp`, what an MCP client uses. The older
+`/wp-json/mcp/niranzwp` answers too, so clients already pointed at it keep
+working.
 
 Both are the same abilities behind the same permission check. Nothing is
 available over one and not the other.
@@ -23,7 +25,7 @@ This is the device grant — RFC 8628, the flow built for things with no browser
 ## Claude Code, or any MCP client that runs locally
 
 ```bash
-claude mcp add --transport http your-site https://your-site.com/wp-json/mcp/niranzwp
+claude mcp add --transport http your-site https://your-site.com/mcp
 ```
 
 Then authenticate it. The client registers itself, opens a browser, and the
@@ -32,7 +34,7 @@ site asks you to allow it. Nothing is stored on your machine but the token.
 If your client cannot do OAuth, an application password works too:
 
 ```bash
-claude mcp add --transport http your-site https://your-site.com/wp-json/mcp/niranzwp \
+claude mcp add --transport http your-site https://your-site.com/mcp \
   --header "Authorization: Basic $(printf 'user:app password' | base64)"
 ```
 
@@ -43,7 +45,7 @@ Add the MCP endpoint as a custom connector. The site handles the rest:
 discovery documents a connector looks for.
 
 ```
-https://your-site.com/wp-json/mcp/niranzwp
+https://your-site.com/mcp
 ```
 
 You will be asked to allow it, in wp-admin, as yourself. Allowing gives that
@@ -52,26 +54,21 @@ tool everything you can do on the site.
 Requires HTTPS. A connector runs on someone else's servers and cannot reach
 `http://` or a hostname only your machine resolves.
 
-**As of August 2026 this does not finish on claude.ai.** The flow completes —
-registration, approval, and a token issued with every field a client asked for —
-and then the follow-up request to the MCP endpoint arrives with no
-`Authorization` header, or not at all. The client reports that authorization
-failed.
+**The address matters.** claude.ai's connector backend completes the OAuth
+flow and then never sends the token unless the endpoint path is exactly
+`/mcp` - isolated upstream in
+[#878](https://github.com/anthropics/claude-ai-mcp/issues/878) by varying only
+the path against one server, and confirmed here. That is why `/mcp` is what
+this plugin advertises. Give a connector that address; the `/wp-json` one is
+kept so existing clients keep working, not for new connections.
 
-This is not something a server can fix. The same symptom is reported against
-unrelated stacks — Entra ID, Clerk, n8n — and against two servers built to the
-spec and tested side by side:
-[#690](https://github.com/anthropics/claude-ai-mcp/issues/690),
-[#393](https://github.com/anthropics/claude-ai-mcp/issues/393),
-[#506](https://github.com/anthropics/claude-ai-mcp/issues/506),
-[#315](https://github.com/anthropics/claude-ai-mcp/issues/315).
-
-Before concluding you have hit it, read **NiranzWP → Troubleshoot**. A token
-issued with `last_used: never`, followed by a request logged as `auth: none`,
-is this and nothing else. Anything else in that log is worth reading first.
-
-Use Claude Code instead, which authenticates against the same endpoint and
-works.
+If a connector signs in and then reports no tools, read **NiranzWP ->
+Troubleshoot**. The Discovery chain row fetches the three discovery documents
+the way a client would and says where they disagree, and the request log below
+it shows what arrived and whether it carried a token. A run of `auth: Bearer`
+entries answered `401` means this server is refusing a token it should accept
+- a fault here, whatever the client's own error text suggests. That exact
+reading is what found the last one.
 
 ## From a phone
 
@@ -123,4 +120,5 @@ approval does not touch the others.
 | `MCP endpoint not found` | Wrong URL, or abilities are switched off on the site. |
 | `401` with no `WWW-Authenticate` | An older version. Update the plugin. |
 | The server is missing from `claude mcp list` | It was added to one directory. `claude mcp add --scope user` puts it in every directory instead. |
-| Authorization succeeds and the client still says it failed | The claude.ai connector bug above. Confirm it in Troubleshoot before spending time on it. |
+| Authorization succeeds, then the client says it cannot connect | Give it `/mcp`, not the `/wp-json` address. |
+| Connected, but "no tools available" | The server is refusing the token it was given. Troubleshoot's request log will show `auth: Bearer` answered `401`. |
